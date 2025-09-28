@@ -5,6 +5,7 @@ mod interpreter;
 mod cli;
 mod deps;
 mod utils;
+mod formatter;
 
 use anyhow::Result;
 use cli::run_cli;
