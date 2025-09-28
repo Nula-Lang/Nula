@@ -1,6 +1,6 @@
 [package]
 name = "nula"
-version = "0.2.0"  # Ulepszona wersja
+version = "0.3.0"  # Nowa wersja
 edition = "2021"
 
 [dependencies]
@@ -15,5 +15,7 @@ tokio = { version = "1.0", features = ["full"] }
 reqwest = { version = "0.12", features = ["json"] }
 git2 = "0.18"
 tempfile = "3.10"
-regex = "1.10"  # Dla lepszego parsowania
-backtrace = "0.3"  # Dla błędów
+regex = "1.10"
+backtrace = "0.3"
+indextree = "4.6"  # Dla drzewiastego AST
+prettytable = "0.10"  # Dla tabel w CLI/help
