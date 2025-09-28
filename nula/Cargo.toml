@@ -1,6 +1,6 @@
 [package]
-name = "nula"
-version = "0.3.0"  # Nowa wersja
+name = "nula-lang"
+version = "0.5.0"  # Najnowsza wersja z rozbudową
 edition = "2021"
 
 [dependencies]
@@ -17,5 +17,6 @@ git2 = "0.18"
 tempfile = "3.10"
 regex = "1.10"
 backtrace = "0.3"
-indextree = "4.6"  # Dla drzewiastego AST
-prettytable = "0.10"  # Dla tabel w CLI/help
+indextree = "4.6"
+prettytable = "0.10"
+thiserror = "1.0"  # Dla błędów
