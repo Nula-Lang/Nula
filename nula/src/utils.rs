@@ -16,8 +16,10 @@ pub fn get_project_dir() -> Result<PathBuf, Error> {
     }
 }
 
-pub fn show_error(msg: &str, file: &PathBuf) -> Error {
-    eprintln!("{} in {}:\n{}", "Error".red().bold(), file.display().to_string().yellow(), msg.red());
+pub fn show_error(msg: &str, file: &PathBuf, code: &str) -> Error {
+    eprintln!("{} in {}:\n{}", "Error".red().bold(), file.display().yellow(), msg.red());
+    // Snippet: assume line from msg, but stub
+    eprintln!("Snippet: {}", code.lines().next().unwrap_or("").cyan());
     eprintln!("Backtrace:\n{:?}", Backtrace::new());
     anyhow::anyhow!(msg.to_string())
 }
