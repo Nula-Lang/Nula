@@ -1,0 +1,43 @@
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+
+comment = @{ "@" ~ (!("\n" | "\r") ~ ANY)* ~ ("\n" | "\r" | !ANY) }
+
+string = { ASCII_ALPHA+ }  // Prosty string bez "" dla write Hello;
+
+quoted_string = { "\"" ~ (("\\" ~ ANY) | (!("\"") ~ ANY))* ~ "\"" }
+
+int = { ASCII_DIGIT+ }
+
+var = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+bin_op = { expr ~ ("+" | "-" | "*" | ">" | "<") ~ expr }
+
+expr = { bin_op | call | int | quoted_string | string | var }
+
+call = { var ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }
+
+write_stmt = { "write" ~ expr ~ ";" }
+
+dependency = { "<" ~ var ~ ">" }
+
+foreign_lang = { "python" | "c" | "cpp" | "ruby" | "java" }
+
+foreign_code = { "{" ~ (!"}" ~ ANY)* ~ "}" }
+
+foreign_block = { "#" ~ "=" ~ foreign_lang ~ "=" ~ foreign_code }
+
+let_stmt = { "let" ~ var ~ "=" ~ expr ~ ";" }
+
+for_stmt = { "for" ~ var ~ "in" ~ int ~ ".." ~ int ~ "{" ~ program ~ "}" }
+
+if_stmt = { "if" ~ expr ~ "{" ~ program ~ "}" }
+
+param = { var }
+
+params = { "(" ~ (param ~ ("," ~ param)*)? ~ ")" }
+
+fn_def = { "fn" ~ var ~ params ~ "{" ~ program ~ "return" ~ expr ~ ";" ~ "}" }
+
+stmt = { comment | write_stmt | dependency | foreign_block | let_stmt | for_stmt | if_stmt | fn_def }
+
+program = { SOI ~ stmt* ~ EOI }
