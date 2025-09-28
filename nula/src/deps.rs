@@ -1,14 +1,15 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::*;
-use reqwest;
+use reqwest::Client;
 use git2::Repository;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tempfile::tempdir;
+use regex::Regex;
 
 pub async fn install_dep(dep: &str) -> Result<()> {
     let lib_url = "https://raw.githubusercontent.com/Nula-Lang/Nula/main/nula/library.nula";
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let lib_content = client.get(lib_url).send().await?.text().await?;
     
     let mut repo_map = std::collections::HashMap::new();
@@ -21,7 +22,7 @@ pub async fn install_dep(dep: &str) -> Result<()> {
     if let Some(repo) = repo_map.get(dep) {
         let tmp_dir = tempdir()?;
         let repo_path = tmp_dir.path().join(dep);
-        Repository::clone(repo, repo_path.clone()).context("Clone failed")?;
+        Repository::clone(repo, &repo_path).context("Clone failed")?;
         
         let install_dir = Path::new("/usr/lib/.nula-lib/").join(dep);
         fs::create_dir_all(&install_dir)?;
@@ -35,13 +36,15 @@ pub async fn install_dep(dep: &str) -> Result<()> {
 }
 
 fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let ty = entry.file_type()?;
+        let dst_path = dst.join(entry.file_name());
         if ty.is_dir() {
-            copy_dir(&entry.path(), &dst.join(entry.file_name()))?;
+            copy_dir(&entry.path(), &dst_path)?;
         } else {
-            fs::copy(entry.path(), dst.join(entry.file_name()))?;
+            fs::copy(entry.path(), dst_path)?;
         }
     }
     Ok(())
@@ -51,11 +54,21 @@ pub fn resolve_deps(deps: &[String]) -> Result<()> {
     for dep in deps {
         let path = Path::new("/usr/lib/.nula-lib/").join(dep);
         if !path.exists() {
-            println!("{} Missing dep {}, install it", "⚠".yellow(), dep.yellow());
+            println!("{} Missing {}, please install", "⚠".yellow(), dep.yellow());
         } else {
-            println!("{} Resolved {}", "✓".green(), dep);
-            // Include in build somehow, e.g. link libs
+            println!("{} Resolved {}", "✓".green(), dep.green());
         }
     }
     Ok(())
+}
+
+pub fn load_bottles_deps(project_dir: &PathBuf) -> Result<Vec<String>> {
+    let bottles_file = project_dir.join("nula.bottles");
+    if !bottles_file.exists() {
+        return Ok(vec![]);  // Opcjonalny
+    }
+    let content = fs::read_to_string(&bottles_file)?;
+    let re = Regex::new(r":<(\w+)>:").unwrap();
+    let deps: Vec<String> = re.captures_iter(&content).map(|c| c[1].to_string()).collect();
+    Ok(deps)
 }
