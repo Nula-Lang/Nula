@@ -7,6 +7,11 @@ echo "[RUN] Clones the repository."
 git clone https://github.com/Nula-Lang/Nula.git /tmp/Nula
 cd /tmp/Nula
 
+echo "[INSTALL] installing required dependencies"
+sudo apt install gcc
+
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
 echo "[RUN] Building nula"
 
 echo "[INFO] The operation has been completed"
