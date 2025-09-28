@@ -2,7 +2,7 @@ WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 
 comment = @{ "@" ~ (!("\n" | "\r") ~ ANY)* ~ ("\n" | "\r" | !ANY) }
 
-string = { ASCII_ALPHA+ }  // Prosty string bez "" dla write Hello;
+string = { ASCII_ALPHA+ }  
 
 quoted_string = { "\"" ~ (("\\" ~ ANY) | (!("\"") ~ ANY))* ~ "\"" }
 
@@ -10,11 +10,17 @@ int = { ASCII_DIGIT+ }
 
 var = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
+expr = ${ bin_op | call | array | index | length | int | quoted_string | string | var }
+
 bin_op = { expr ~ ("+" | "-" | "*" | ">" | "<") ~ expr }
 
-expr = { bin_op | call | int | quoted_string | string | var }
-
 call = { var ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }
+
+array = { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+
+index = { expr ~ "[" ~ expr ~ "]" }
+
+length = { expr ~ ".length" }
 
 write_stmt = { "write" ~ expr ~ ";" }
 
@@ -28,9 +34,11 @@ foreign_block = { "#" ~ "=" ~ foreign_lang ~ "=" ~ foreign_code }
 
 let_stmt = { "let" ~ var ~ "=" ~ expr ~ ";" }
 
-for_stmt = { "for" ~ var ~ "in" ~ int ~ ".." ~ int ~ "{" ~ program ~ "}" }
+for_stmt = { "for" ~ var ~ "in" ~ expr ~ ".." ~ expr ~ "{" ~ program ~ "}" }
 
 if_stmt = { "if" ~ expr ~ "{" ~ program ~ "}" }
+
+while_stmt = { "while" ~ expr ~ "{" ~ program ~ "}" }
 
 param = { var }
 
@@ -38,6 +46,6 @@ params = { "(" ~ (param ~ ("," ~ param)*)? ~ ")" }
 
 fn_def = { "fn" ~ var ~ params ~ "{" ~ program ~ "return" ~ expr ~ ";" ~ "}" }
 
-stmt = { comment | write_stmt | dependency | foreign_block | let_stmt | for_stmt | if_stmt | fn_def }
+stmt = { comment | write_stmt | dependency | foreign_block | let_stmt | for_stmt | if_stmt | while_stmt | fn_def }
 
 program = { SOI ~ stmt* ~ EOI }
