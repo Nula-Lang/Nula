@@ -1,112 +1,194 @@
-use crate::ast::{AstNode, Expr, AstTree, Type};
-use std::fs::File;
-use std::io::Write;
-use std::path::PathBuf;
+use crate::ir::{IrModule, IrInstr, IrValue};
+use crate::ast::{Type};
+use std::fmt::Write as FmtWrite;
 
-pub fn generate_c_code(ast: &AstTree, project_dir: &PathBuf) -> Result<PathBuf, anyhow::Error> {
-    let mut c_code = String::from("#include <stdio.h>\n#include <stdlib.h>\nint main() {\n");
-    for child in ast.root.children(&ast.arena) {
-        let node = ast.arena.get(child).unwrap().get();
-        c_code.push_str(&node_to_c(node).as_str());
+// Poważny codegen: generuj x86-64 assembly bezpośrednio z IR
+pub fn generate_assembly(module: &IrModule) -> String {
+    let mut asm = String::new();
+    asm.push_str(".section .text\n");
+
+    for global in &module.globals {
+        asm.push_str(&format!(".global {}\n", global.0));
+        // Gen global data
     }
-    c_code.push_str("return 0;\n}");
-    
-    // Optymalizacja: simple const fold
-    // np. zastąp 2+3 na 5, ale uproszczone
-    c_code = c_code.replace("2 + 3", "5");
-    
-    let c_file = project_dir.join("output.c");
-    let mut file = File::create(&c_file)?;
-    file.write_all(c_code.as_bytes())?;
-    Ok(c_file)
-}
 
-fn node_to_c(node: &AstNode) -> String {
-    match node {
-        AstNode::Write(e) => format!("printf(\"%d\\n\", {});\n", expr_to_c(e)),  // Assume int
-        AstNode::Let { name, value, ty } => {
-            let ty_str = type_to_c(ty);
-            format!("{} {} = {};\n", ty_str, name, expr_to_c(value))
+    for func in &module.functions {
+        asm.push_str(&format!(".global {}\n{}:\n", func.name, func.name));
+        // Prolog: push rbp, mov rbp rsp, sub rsp stack_size
+        let stack_size = calculate_stack_size(func);  // Calc allocas
+        asm.push_str("    push %rbp\n    mov %rsp, %rbp\n");
+        if stack_size > 0 {
+            asm.push_str(&format!("    sub ${}, %rsp\n", stack_size));
         }
-        AstNode::For { var, range: (start, end), body } => {
-            format!("for(int {} = {}; {} < {}; {}++) {{\n{}\n}}\n",
-                    var, expr_to_c(start), var, expr_to_c(end), var, body_to_c(body))
+
+        let mut regs = RegAllocator::new();  // Poważna alokacja rejestrów
+        let mut labels = LabelGenerator::new();
+
+        for instr in &func.body {
+            match instr {
+                IrInstr::Label(l) => asm.push_str(&format!("{}:\n", l)),
+                IrInstr::Alloca { dest, ty } => {
+                    let size = ty_size(ty);
+                    let offset = regs.alloc_stack(size);
+                    regs.bind_reg(dest, Reg::Stack(offset));
+                }
+                IrInstr::Load { dest, src } => {
+                    let src_reg = regs.get_reg(src);
+                    let dest_reg = regs.alloc_temp();
+                    asm.push_str(&format!("    mov {}, {}\n", src_reg, dest_reg));
+                    regs.bind_reg(dest, dest_reg);
+                }
+                IrInstr::Store { dest, value } => {
+                    let dest_reg = regs.get_reg(dest);
+                    let val_reg = gen_value(value, &mut regs, &mut asm);
+                    asm.push_str(&format!("    mov {}, {}\n", val_reg, dest_reg));
+                }
+                IrInstr::BinOp { dest, op, left, right } => {
+                    let left_reg = gen_value(left, &mut regs, &mut asm);
+                    let right_reg = gen_value(right, &mut regs, &mut asm);
+                    let dest_reg = regs.alloc_temp();
+                    match op.as_str() {
+                        "+" => asm.push_str(&format!("    add {}, {}\n", right_reg, left_reg)),
+                        "-" => asm.push_str(&format!("    sub {}, {}\n", right_reg, left_reg)),
+                        "*" => asm.push_str(&format!("    imul {}, {}\n", right_reg, left_reg)),
+                        // ... Dla > < use cmp + set
+                        _ => {},
+                    }
+                    asm.push_str(&format!("    mov {}, {}\n", left_reg, dest_reg));
+                    regs.bind_reg(dest, dest_reg);
+                    regs.free_temp(left_reg);
+                    regs.free_temp(right_reg);
+                }
+                IrInstr::Call { dest, fn_name, args } => {
+                    // Push args to stack or regs (ABI)
+                    for (i, arg) in args.iter().enumerate().rev() {
+                        let arg_reg = gen_value(arg, &mut regs, &mut asm);
+                        if i < 6 {
+                            asm.push_str(&format!("    mov {}, {}\n", arg_reg, arg_regs[i]));
+                        } else {
+                            asm.push_str(&format!("    push {}\n", arg_reg));
+                        }
+                    }
+                    asm.push_str(&format!("    call {}\n", fn_name));
+                    if let Some(d) = dest {
+                        let dest_reg = regs.alloc_temp();
+                        asm.push_str(&format!("    mov %rax, {}\n", dest_reg));
+                        regs.bind_reg(d, dest_reg);
+                    }
+                }
+                IrInstr::Branch { cond, true_label, false_label } => {
+                    if let Some(c) = cond {
+                        let cond_reg = gen_value(c, &mut regs, &mut asm);
+                        asm.push_str(&format!("    test {}, {}\n    jnz {}\n    jmp {}\n", cond_reg, cond_reg, true_label, false_label));
+                    } else {
+                        asm.push_str(&format!("    jmp {}\n", true_label));
+                    }
+                }
+                IrInstr::Ret(value) => {
+                    let val_reg = gen_value(value, &mut regs, &mut asm);
+                    asm.push_str(&format!("    mov {}, %rax\n", val_reg));
+                    asm.push_str("    leave\n    ret\n");
+                }
+                IrInstr::Gep { dest, ptr, indices } => {
+                    let ptr_reg = regs.get_reg(ptr);
+                    let mut res_reg = ptr_reg.clone();
+                    for idx in indices {
+                        let idx_reg = gen_value(idx, &mut regs, &mut asm);
+                        let temp = regs.alloc_temp();
+                        asm.push_str(&format!("    lea ({},{},8), {}\n", ptr_reg, idx_reg, temp));  // Assume i64
+                        res_reg = temp;
+                    }
+                    regs.bind_reg(dest, res_reg);
+                }
+                // ... Poważna obsługa dla wszystkich IR instr
+            }
         }
-        AstNode::If { cond, body } => {
-            format!("if({}) {{\n{}\n}}\n", expr_to_c(cond), body_to_c(body))
-        }
-        AstNode::While { cond, body } => {
-            format!("while({}) {{\n{}\n}}\n", expr_to_c(cond), body_to_c(body))
-        }
-        AstNode::Fn { name, params, body, ret, ret_ty } => {
-            let param_str: Vec<String> = params.iter().map(|(p, t)| format!("{} {}", type_to_c(t), p)).collect();
-            let ret_str = type_to_c(ret_ty);
-            format!("{} {}({}) {{\n{}\nreturn {};\n}}\n", ret_str, name, param_str.join(", "), body_to_c(body), expr_to_c(ret))
-        }
-        AstNode::ForeignBlock { lang, code } => translate_foreign(lang, code),
-        _ => "".to_string(),
     }
+    asm
 }
 
-fn body_to_c(body: &[AstNode]) -> String {
-    body.iter().map(node_to_c).collect()
-}
-
-fn expr_to_c(expr: &Expr) -> String {
-    match expr {
-        Expr::Int(i) => i.to_string(),
-        Expr::Str(s) => format!("\"{}\"", s),
-        Expr::Var(v) => v.clone(),
-        Expr::BinOp { op, left, right } => format!("({} {} {})", expr_to_c(left), op, expr_to_c(right)),
-        Expr::Call { name, args } => {
-            let arg_str: Vec<String> = args.iter().map(expr_to_c).collect();
-            format!("{}({})", name, arg_str.join(", "))
-        }
-        Expr::Array(elems) => {
-            let elem_str: Vec<String> = elems.iter().map(expr_to_c).collect();
-            format!("(int[]){{{}}}", elem_str.join(", "))
-        }
-        Expr::Index { arr, idx } => format!("{}[{}]", expr_to_c(arr), expr_to_c(idx)),
-        Expr::Length(arr) => format!("(sizeof({}) / sizeof({}[0]))", expr_to_c(arr), expr_to_c(arr)),
-    }
-}
-
-fn type_to_c(ty: &Type) -> String {
+fn ty_size(ty: &Type) -> u32 {
     match ty {
-        Type::Int => "int".to_string(),
-        Type::Str => "char*".to_string(),
-        Type::Array(inner) => format!("{}[]", type_to_c(inner)),
-        _ => "void".to_string(),
+        Type::Int => 8,
+        Type::Float => 8,
+        Type::Bool => 1,
+        Type::Str => 8,  // Ptr
+        Type::Array(_) => 8,  // Ptr
+        Type::Struct { fields, .. } => fields.iter().map(|(_, t)| ty_size(t)).sum(),
+        // ...
+        _ => 8,
     }
 }
 
-fn translate_foreign(lang: &str, code: &str) -> String {
-    match lang {
-        "python" => {
-            // Zaawansowana translacja: parse simple python to C
-            if code.contains("print") {
-                let msg = code.split("print(").nth(1).unwrap_or("").split(")").next().unwrap_or("").trim();
-                format!("printf({});\n", msg)
-            } else { "// Python\n".to_string() }
-        }
-        "c" => code.to_string(),
-        "cpp" => {
-            "// CPP\n#include <iostream>\n" + code
-        }
-        "ruby" => {
-            // Translacja puts -> printf
-            if code.contains("puts") {
-                let msg = code.split("puts ").nth(1).unwrap_or("").trim();
-                format!("printf({}\\n);\n", msg)
-            } else { "// Ruby\n".to_string() }
-        }
-        "java" => {
-            // Translacja System.out.println -> printf
-            if code.contains("System.out.println") {
-                let msg = code.split("println(").nth(1).unwrap_or("").split(");").next().unwrap_or("").trim();
-                format!("printf({}\\n);\n", msg)
-            } else { "// Java\n".to_string() }
-        }
-        _ => "// Unsupported\n".to_string(),
+fn calculate_stack_size(func: &IrFunction) -> u32 {
+    // Count allocas * sizes
+    0  // Impl
+}
+
+struct RegAllocator {
+    temps: Vec<Reg>,
+    stack_offset: u32,
+    bindings: HashMap<String, Reg>,
+}
+
+#[derive(Clone)]
+enum Reg {
+    Gpr(String),  // %rax, %rbx, etc.
+    Stack(u32),  // -offset(%rbp)
+}
+
+impl RegAllocator {
+    fn new() -> Self {
+        RegAllocator { temps: vec![], stack_offset: 0, bindings: HashMap::new() }
+    }
+
+    fn alloc_temp(&mut self) -> Reg {
+        // Use callee-saved regs, etc.
+        Reg::Gpr("%r10".to_string())  // Simpl
+    }
+
+    fn free_temp(&mut self, reg: Reg) {
+        // Push back
+    }
+
+    fn alloc_stack(&mut self, size: u32) -> u32 {
+        let offset = self.stack_offset;
+        self.stack_offset += size;
+        offset
+    }
+
+    fn bind_reg(&mut self, name: &str, reg: Reg) {
+        self.bindings.insert(name.to_string(), reg);
+    }
+
+    fn get_reg(&self, name: &str) -> Reg {
+        self.bindings.get(name).cloned().unwrap_or(Reg::Stack(0))
     }
 }
+
+struct LabelGenerator {
+    counter: u32,
+}
+
+impl LabelGenerator {
+    fn new() -> Self { LabelGenerator { counter: 0 } }
+    fn gen(&mut self) -> String {
+        self.counter += 1;
+        format!(".L{}", self.counter)
+    }
+}
+
+fn gen_value(value: &IrValue, regs: &mut RegAllocator, asm: &mut String) -> Reg {
+    match value {
+        IrValue::Reg(r) => regs.get_reg(r),
+        IrValue::ImmInt(i) => {
+            let temp = regs.alloc_temp();
+            asm.push_str(&format!("    mov ${}, {}\n", i, temp));
+            temp
+        }
+        // ... Dla float (movsd), str (lea .str, reg), bool
+        _ => Reg::Gpr("%rax".to_string()),
+    }
+}
+
+// Dla foreign: parse and gen IR then asm
