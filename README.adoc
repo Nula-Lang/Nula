@@ -42,7 +42,7 @@ Język pozwala również na tłumaczenie kodu z innych języków (np. Python) do
 * Syntax: `write` zamiast `print`
 * Komentarze: `@` 
 * Tłumaczenie kodu: `# = python = {print("hi")}`
-* Zależności: `<(the-racer)>` lub `bottles.nula`
+* Zależności: `<(zaleznosc)>` lub `bottles.nula`
 * Komendy CLI: `help`, `build`, `run`, `create`, `install {dep}`
 * Wydajność: blisko C dzięki Zig
 
