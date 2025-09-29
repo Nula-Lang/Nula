@@ -1,53 +1,80 @@
-use crate::ast::{AstTree, Expr, AstNode, Type};
+use crate::cli::{print_error, print_info};
 use std::collections::HashMap;
 
-#[derive(Clone)]
-enum Value {
-    Int(i64),
-    Float(f64),
-    Str(String),
-    Bool(bool),
-    Array(Vec<Value>),
-    Struct { fields: HashMap<String, Value> },
-    Enum { variant: String, value: Option<Box<Value>> },
-    Fn { params: Vec<String>, body: Vec<AstNode> },  // Closure stub
-}
+pub fn interpret_ast(ast: &str) {
+    print_info("Starting interpretation...");
+    let mut variables: HashMap<String, i64> = HashMap::new();
 
-pub fn interpret_ast(ast: &AstTree) -> Result<(), AstError> {
-    let mut globals = HashMap::new();
-    for child in ast.root.children(&ast.arena) {
-        interpret_node(ast, &ast.arena.get(child).unwrap().get(), &mut globals)?;
+    for line in ast.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('@') {
+            continue; // Skip comments
+        }
+        if trimmed.starts_with("write") {
+            let msg = trimmed.trim_start_matches("write ").trim_matches(|c| c == '"' || c == '\'');
+            let processed = process_expression(msg, &variables);
+            println!("{}", processed);
+        } else if trimmed.starts_with("add") {
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() == 3 {
+                let a = process_expression(parts[1], &variables).parse::<i64>().unwrap_or(0);
+                let b = process_expression(parts[2], &variables).parse::<i64>().unwrap_or(0);
+                println!("{}", a + b);
+            }
+        } else if trimmed.starts_with("var") {
+            let parts: Vec<&str> = trimmed.split('=').collect();
+            if parts.len() == 2 {
+                let name = parts[0].trim_start_matches("var ").trim().to_string();
+                let value_str = process_expression(parts[1].trim(), &variables);
+                let value = value_str.parse::<i64>().unwrap_or(0);
+                variables.insert(name, value);
+            }
+        } else if trimmed.starts_with("if") {
+            // Simple if handling
+            let condition = trimmed.trim_start_matches("if ").split('{').next().unwrap_or("").trim();
+            if evaluate_condition(condition, &variables) {
+                // Execute block (simplified, assume single stmt)
+                let block = trimmed.split('{').nth(1).unwrap_or("").split('}').next().unwrap_or("").trim();
+                interpret_block(block, &mut variables);
+            }
+        }
+        // Add more: loops, functions...
     }
-    Ok(())
+    print_info("Interpretation completed");
 }
 
-fn interpret_node(ast: &AstTree, node: &AstNode, env: &mut HashMap<String, Value>) -> Result<Value, AstError> {
-    match node {
-        AstNode::Write(e) => {
-            let val = interpret_expr(e, env)?;
-            println!("{:?}", val);
-            Ok(Value::Int(0))
-        }
-        AstNode::Let { name, value, .. } => {
-            let val = interpret_expr(value, env)?;
-            env.insert(name.clone(), val);
-            Ok(Value::Int(0))
-        }
-        // ... Poważna interpretacja dla for (loop), if, while, fn (def closure), call (exec), struct/enum lit, method (dispatch based on type)
-        _ => Ok(Value::Int(0)),
+fn process_expression(expr: &str, vars: &HashMap<String, i64>) -> String {
+    if let Some(value) = vars.get(expr) {
+        value.to_string()
+    } else {
+        expr.to_string()
     }
 }
 
-fn interpret_expr(expr: &Expr, env: &HashMap<String, Value>) -> Result<Value, AstError> {
-    match expr {
-        Expr::Int(i) => Ok(Value::Int(*i)),
-        Expr::Float(f) => Ok(Value::Float(*f)),
-        // ... Dla binop (match types), call, etc.
-        Expr::MethodCall { obj, method, args } => {
-            let obj_val = interpret_expr(obj, env)?;
-            // Dynamic dispatch: find method in obj type
-            Ok(Value::Int(0))
+fn evaluate_condition(cond: &str, vars: &HashMap<String, i64>) -> bool {
+    // Simple equality check, e.g., "x == 5"
+    let parts: Vec<&str> = cond.split("==").collect();
+    if parts.len() == 2 {
+        let left = process_expression(parts[0].trim(), vars).parse::<i64>().unwrap_or(0);
+        let right = process_expression(parts[1].trim(), vars).parse::<i64>().unwrap_or(0);
+        left == right
+    } else {
+        false
+    }
+}
+
+fn interpret_block(block: &str, vars: &mut HashMap<String, i64>) {
+    // Recursive interpret for blocks
+    for stmt in block.split(';') {
+        // Simplified
+        let trimmed = stmt.trim();
+        if !trimmed.is_empty() {
+            // Call interpret_ast on stmt, but avoid recursion depth issues
+            if trimmed.starts_with("write") {
+                let msg = trimmed.trim_start_matches("write ").trim_matches(|c| c == '"' || c == '\'');
+                println!("{}", process_expression(msg, vars));
+            }
+            // Etc.
         }
-        _ => Err(AstError::Undefined("Unsupported".to_string())),
     }
 }
