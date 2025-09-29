@@ -1,15 +1,29 @@
-use anyhow::Result;
-use std::fs;
-
-pub fn translate_from(code: &str, from_lang: &str) -> Result<String> {
-    match from_lang {
+pub fn translate_code(lang: &str, code: &str) -> String {
+    let lower_lang = lang.to_lowercase();
+    match lower_lang.as_str() {
         "python" => {
-            // Proste mapowanie: print -> write
-            let translated = code.replace("print(", "write(");
-            Ok(translated)
+            code.replace("print(", "write ")
+                .replace("def ", "fn ")
+                .replace("if ", "if ")
+                .replace("for ", "for ")
+                .replace("while ", "while ")
+                .replace(":", " {")
+                .replace("\n", ";\n") // Simplified
         }
-        _ => Ok(code.to_string()),
+        "javascript" => {
+            code.replace("console.log(", "write ")
+                .replace("function ", "fn ")
+                .replace("if(", "if ")
+                .replace("for(", "for ")
+                .replace("while(", "while ")
+        }
+        "rust" => {
+            code.replace("println!(", "write ")
+                .replace("fn ", "fn ")
+                .replace("if ", "if ")
+                .replace("for ", "for ")
+                .replace("while ", "while ")
+        }
+        _ => code.to_string(),
     }
 }
-
-// Użyj w parser: jeśli kod ma # = lang = {code}, parse i translate
