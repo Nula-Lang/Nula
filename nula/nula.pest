@@ -1,51 +1,19 @@
-WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+WHITESPACE = _{ " " | "\t" | "\n" }
 
-comment = @{ "@" ~ (!("\n" | "\r") ~ ANY)* ~ ("\n" | "\r" | !ANY) }
+comment = @{ "*" ~ ANY ~ "*" }  // @komentarz
 
-string = { ASCII_ALPHA+ }  
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
-quoted_string = { "\"" ~ (("\\" ~ ANY) | (!("\"") ~ ANY))* ~ "\"" }
+string = @{ "\"" ~ (ASCII_ALPHANUMERIC | " " | "." | "," | "!" | "?" | "(" | ")")* ~ "\"" }
 
-int = { ASCII_DIGIT+ }
+number = @{ ASCII_DIGIT+ }
 
-var = { ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+print_stmt = { "write" ~ WHITESPACE* ~ "(" ~ string ~ ")" ~ ";" }
 
-expr = ${ bin_op | call | array | index | length | int | quoted_string | string | var }
+assign_stmt = { identifier ~ WHITESPACE* ~ "=" ~ WHITESPACE* ~ (number | string) ~ ";" }
 
-bin_op = { expr ~ ("+" | "-" | "*" | ">" | "<") ~ expr }
+expr = { number | string | identifier }
 
-call = { var ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }
+stmt = { print_stmt | assign_stmt }
 
-array = { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
-
-index = { expr ~ "[" ~ expr ~ "]" }
-
-length = { expr ~ ".length" }
-
-write_stmt = { "write" ~ expr ~ ";" }
-
-dependency = { "<" ~ var ~ ">" }
-
-foreign_lang = { "python" | "c" | "cpp" | "ruby" | "java" }
-
-foreign_code = { "{" ~ (!"}" ~ ANY)* ~ "}" }
-
-foreign_block = { "#" ~ "=" ~ foreign_lang ~ "=" ~ foreign_code }
-
-let_stmt = { "let" ~ var ~ "=" ~ expr ~ ";" }
-
-for_stmt = { "for" ~ var ~ "in" ~ expr ~ ".." ~ expr ~ "{" ~ program ~ "}" }
-
-if_stmt = { "if" ~ expr ~ "{" ~ program ~ "}" }
-
-while_stmt = { "while" ~ expr ~ "{" ~ program ~ "}" }
-
-param = { var }
-
-params = { "(" ~ (param ~ ("," ~ param)*)? ~ ")" }
-
-fn_def = { "fn" ~ var ~ params ~ "{" ~ program ~ "return" ~ expr ~ ";" ~ "}" }
-
-stmt = { comment | write_stmt | dependency | foreign_block | let_stmt | for_stmt | if_stmt | while_stmt | fn_def }
-
-program = { SOI ~ stmt* ~ EOI }
+program = SOI ~ { stmt* } ~ EOI
