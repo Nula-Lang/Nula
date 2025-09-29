@@ -1,19 +1,49 @@
-WHITESPACE = _{ " " | "\t" | "\n" }
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+COMMENT = _{ "@" ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
 
-comment = @{ "*" ~ ANY ~ "*" }  // @komentarz
+program = { SOI ~ (translation | dependency | import_stmt | statement | COMMENT)* ~ EOI }
 
-identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+translation = { "#" ~ "=" ~ ident ~ "=" ~ "{" ~ code_block ~ "}" }
+code_block = { (!"}" ~ ANY)* }
 
-string = @{ "\"" ~ (ASCII_ALPHANUMERIC | " " | "." | "," | "!" | "?" | "(" | ")")* ~ "\"" }
+dependency = { "<" ~ (ident | file_path) ~ ">" }
 
-number = @{ ASCII_DIGIT+ }
+import_stmt = { "import" ~ (ident | file_path) }
 
-print_stmt = { "write" ~ WHITESPACE* ~ "(" ~ string ~ ")" ~ ";" }
+statement = { (variable_decl | function_def | loop_stmt | conditional | write_stmt | add_stmt | mul_stmt | expression | return_stmt | COMMENT) ~ ";"? }
 
-assign_stmt = { identifier ~ WHITESPACE* ~ "=" ~ WHITESPACE* ~ (number | string) ~ ";" }
+variable_decl = { "var" ~ ident ~ "=" ~ expression }
 
-expr = { number | string | identifier }
+function_def = { "fn" ~ ident ~ "(" ~ param_list? ~ ")" ~ "{" ~ statement* ~ "}" }
+param_list = { ident ~ ("," ~ ident)* }
 
-stmt = { print_stmt | assign_stmt }
+loop_stmt = { for_loop | while_loop }
+for_loop = { "for" ~ ident ~ "in" ~ expression ~ "{" ~ statement* ~ "}" }
+while_loop = { "while" ~ expression ~ "{" ~ statement* ~ "}" }
 
-program = SOI ~ { stmt* } ~ EOI
+conditional = { "if" ~ expression ~ "{" ~ statement* ~ "}" ~ else_if* ~ else_clause? }
+else_if = { "else if" ~ expression ~ "{" ~ statement* ~ "}" }
+else_clause = { "else" ~ "{" ~ statement* ~ "}" }
+
+write_stmt = { "write" ~ expression }
+add_stmt = { "add" ~ expression ~ expression }
+mul_stmt = { "mul" ~ expression ~ expression }
+
+return_stmt = { "return" ~ expression? }
+
+expression = { string | number | bool | ident | call | binary_expr | unary_expr | paren_expr }
+binary_expr = { expression ~ bin_op ~ expression }
+bin_op = { "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "and" | "or" }
+unary_expr = { unary_op ~ expression }
+unary_op = { "-" | "not" }
+paren_expr = { "(" ~ expression ~ ")" }
+
+call = { ident ~ "(" ~ arg_list? ~ ")" }
+arg_list = { expression ~ ("," ~ expression)* }
+
+bool = { "true" | "false" }
+
+string = { "\"" ~ (!"\"" ~ ANY)* ~ "\"" | "'" ~ (!"'" ~ ANY)* ~ "'" }
+number = { "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+ident = { (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+file_path = { (ASCII_ALPHANUMERIC | "." | "/" | "-" | "_")+ }
