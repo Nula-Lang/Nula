@@ -1,25 +1,31 @@
-use anyhow::Error;
-use backtrace::Backtrace;
-use colored::*;
-use std::path::PathBuf;
+use directories::BaseDirs;
 use std::env;
+use std::path::{Path, PathBuf};
 
-pub fn get_project_dir() -> Result<PathBuf, Error> {
-    let mut cwd = env::current_dir()?;
-    loop {
-        if cwd.join("src/main.nula").exists() {
-            return Ok(cwd);
-        }
-        if !cwd.pop() {
-            return Err(anyhow::anyhow!("Not in Nula project"));
-        }
+pub fn is_in_project() -> bool {
+    Path::new("nula.toml").exists() || Path::new("main.nula").exists()
+}
+
+pub fn get_lib_dir() -> PathBuf {
+    if let Some(dirs) = BaseDirs::new() {
+        dirs.data_local_dir().join(".nula-lib")
+    } else {
+        env::current_dir().unwrap_or_default().join(".nula-lib")
     }
 }
 
-pub fn show_error(msg: &str, file: &PathBuf, code: &str) -> Error {
-    eprintln!("{} in {}:\n{}", "Error".red().bold(), file.display().yellow(), msg.red());
-    // Snippet: assume line from msg, but stub
-    eprintln!("Snippet: {}", code.lines().next().unwrap_or("").cyan());
-    eprintln!("Backtrace:\n{:?}", Backtrace::new());
-    anyhow::anyhow!(msg.to_string())
+pub fn get_nula_go_path() -> PathBuf {
+    get_nula_bin_path("nula-go")
+}
+
+pub fn get_nula_zig_path() -> PathBuf {
+    get_nula_bin_path("nula-zig")
+}
+
+fn get_nula_bin_path(name: &str) -> PathBuf {
+    if cfg!(target_os = "windows") {
+        env::current_exe().unwrap_or_default().parent().unwrap_or(Path::new("")).join(format!("{}.exe", name))
+    } else {
+        env::current_exe().unwrap_or_default().parent().unwrap_or(Path::new("")).join(name)
+    }
 }
