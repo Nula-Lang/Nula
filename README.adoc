@@ -26,4 +26,24 @@ curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang
 = About Nula
 Nula was created in 28.09.2025
 
+= Nula Language Documentation
+:toc:
+:toclevels: 2
+:icons: font
+:source-highlighter: rouge
+
+== Wprowadzenie
+**Nula** to nowoczesny, bardzo łatwy w użyciu język programowania.  
+Cechuje się prostym i czytelnym syntaxem, wydajnością bliską C dzięki Zig oraz możliwością uruchamiania kodu w trybie interpretowanym dzięki Python.
+
+Język pozwala również na tłumaczenie kodu z innych języków (np. Python) do Nula w prosty sposób.
+
+=== Kluczowe cechy
+* Syntax: `write` zamiast `print`
+* Komentarze: `@` 
+* Tłumaczenie kodu: `# = python = {print("hi")}`
+* Zależności: `<(the-racer)>` lub `bottles.nula`
+* Komendy CLI: `help`, `build`, `run`, `create`, `install {dep}`
+* Wydajność: blisko C dzięki Zig
+
 = Writing programs in nula
