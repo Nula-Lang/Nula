@@ -1,4 +1,4 @@
-use crate::cli::{print_error, print_info};
+use crate::cli::print_info;
 use std::collections::HashMap;
 
 pub fn interpret_ast(ast: &str) {
