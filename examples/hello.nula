@@ -1,2 +1,0 @@
-write("Hello Nula!"); @ To jest komentarz
-var x = "world"; write(x);
