@@ -13,7 +13,7 @@ var z = add x y
 var wynik = mul z 2
 
 fn greet(name) {
-    write "Cześć, " + name;
+    write "Hi, " + name;
 }
 
 fn factorial(n) {
@@ -27,7 +27,7 @@ fn factorial(n) {
 fn main() {
     write "Start programu";
 
-    greet("Michał");
+    greet("Nula");
 
     write "Wynik dodawania: " + z;
     write "Wynik mnożenia: " + wynik;
