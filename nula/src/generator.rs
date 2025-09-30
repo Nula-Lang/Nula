@@ -5,7 +5,8 @@ pub fn generate_assembly(ast: &str, release: bool, target: Option<&str>) -> Stri
     asm.push_str(".section .text\n.global main\nmain:\n");
 
     for line in ast.lines() {
-        if line.trim().is_empty() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("//") {
             continue;
         }
         if line.starts_with("write") {
@@ -21,10 +22,14 @@ pub fn generate_assembly(ast: &str, release: bool, target: Option<&str>) -> Stri
             if parts.len() == 3 {
                 asm.push_str(&format!("    mov ${}, %rax\n", parts[1]));
                 asm.push_str(&format!("    add ${}, %rax\n", parts[2]));
-                // Assume output to stdout or something
+            }
+        } else if line.starts_with("mul") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() == 3 {
+                asm.push_str(&format!("    mov ${}, %rax\n", parts[1]));
+                asm.push_str(&format!("    imul ${}, %rax\n", parts[2]));
             }
         } else if line.starts_with("var") {
-            // Handle variables, etc.
             let parts: Vec<&str> = line.split('=').collect();
             if parts.len() == 2 {
                 let name = parts[0].trim_start_matches("var ").trim();
@@ -32,7 +37,6 @@ pub fn generate_assembly(ast: &str, release: bool, target: Option<&str>) -> Stri
                 asm.push_str(&format!(".Lvar_{}: .quad {}\n", name, value));
             }
         }
-        // Expand for functions, loops, conditionals...
     }
 
     asm.push_str("    mov $60, %rax\n    xor %rdi, %rdi\n    syscall\n");
@@ -45,6 +49,5 @@ pub fn generate_assembly(ast: &str, release: bool, target: Option<&str>) -> Stri
     }
 
     print_debug(&format!("Generated ASM:\n{}", asm));
-
     asm
 }
