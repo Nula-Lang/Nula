@@ -3,8 +3,7 @@ use crate::generator::generate_assembly;
 use crate::interpreter::interpret_ast;
 use crate::optimizer::optimize_ast;
 use crate::parser::parse_nula_file;
-use crate::utils::{get_lib_dir, get_nula_go_path, is_in_project};
-use std::env;
+use crate::utils::{get_nula_go_path, get_nula_zig_path, is_in_project};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -60,16 +59,13 @@ pub fn install_dependency(args: &[String]) {
     }
     let dep = &args[2];
     let nula_go = get_nula_go_path();
-    let output = match Command::new(&nula_go)
-        .arg("install")
-        .arg(dep)
-        .output() {
-            Ok(o) => o,
-            Err(e) => {
-                print_error(&format!("Failed to execute nula-go: {}", e));
-                return;
-            }
-        };
+    let output = match Command::new(&nula_go).arg("install").arg(dep).output() {
+        Ok(o) => o,
+        Err(e) => {
+            print_error(&format!("Failed to execute nula-go: {}", e));
+            return;
+        }
+    };
 
     if output.status.success() {
         print_success(&format!("Installed dependency '{}'", dep));
@@ -85,7 +81,10 @@ pub fn build_project(args: &[String]) {
     }
 
     let release = args.iter().any(|a| a == "--release");
-    let target = args.iter().position(|a| a == "--target").map(|p| args.get(p + 1).cloned()).flatten();
+    let target = args
+    .iter()
+    .position(|a| a == "--target")
+    .and_then(|p| args.get(p + 1).cloned());
 
     print_info("Resolving dependencies...");
     resolve_dependencies();
@@ -127,7 +126,7 @@ pub fn build_project(args: &[String]) {
             continue;
         }
 
-        let nula_zig = utils::get_nula_zig_path();
+        let nula_zig = get_nula_zig_path();
         let mut zig_cmd = Command::new(&nula_zig);
         zig_cmd.arg("optimize").arg(asm_path.to_str().unwrap_or(""));
         if release {
@@ -155,7 +154,10 @@ pub fn build_project(args: &[String]) {
             file.with_extension("")
         };
         let mut gcc_cmd = Command::new("gcc");
-        gcc_cmd.arg("-o").arg(bin_path.to_str().unwrap_or("")).arg(asm_path.to_str().unwrap_or(""));
+        gcc_cmd
+        .arg("-o")
+        .arg(bin_path.to_str().unwrap_or(""))
+        .arg(asm_path.to_str().unwrap_or(""));
         if release {
             gcc_cmd.arg("-O3");
         }
@@ -209,15 +211,13 @@ pub fn run_project(args: &[String]) {
 
 pub fn resolve_dependencies() {
     let nula_go = get_nula_go_path();
-    let output = match Command::new(&nula_go)
-        .arg("resolve")
-        .output() {
-            Ok(o) => o,
-            Err(e) => {
-                print_error(&format!("Failed to execute nula-go for resolve: {}", e));
-                return;
-            }
-        };
+    let output = match Command::new(&nula_go).arg("resolve").output() {
+        Ok(o) => o,
+        Err(e) => {
+            print_error(&format!("Failed to execute nula-go for resolve: {}", e));
+            return;
+        }
+    };
 
     if output.status.success() {
         print_success("All dependencies resolved");
