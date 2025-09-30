@@ -1,13 +1,15 @@
-use crate::cli::{print_error, print_info, print_success, print_warning};
+use crate::cli::{print_error, print_info, print_note, print_success, print_warning, print_compiling, print_finished};
 use crate::generator::generate_assembly;
 use crate::interpreter::interpret_ast;
 use crate::optimizer::optimize_ast;
 use crate::parser::parse_nula_file;
 use crate::utils::{get_nula_go_path, get_nula_zig_path, is_in_project};
 use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Instant;
+use walkdir::WalkDir;
 
 pub fn create_project(args: &[String]) {
     if args.len() < 3 {
@@ -20,6 +22,7 @@ pub fn create_project(args: &[String]) {
         print_error(&format!("Project '{}' already exists", name));
         return;
     }
+    print_info(&format!("Creating project '{}'...", name));
     if let Err(e) = fs::create_dir_all(path) {
         print_error(&format!("Failed to create directory: {}", e));
         return;
@@ -58,20 +61,138 @@ pub fn install_dependency(args: &[String]) {
         return;
     }
     let dep = &args[2];
-    let nula_go = get_nula_go_path();
-    let output = match Command::new(&nula_go).arg("install").arg(dep).output() {
-        Ok(o) => o,
+    let temp_file = "/tmp/library.nula";
+
+    print_info("Downloading library index...");
+    let curl_output = Command::new("curl")
+    .arg("-s")
+    .arg("-o")
+    .arg(temp_file)
+    .arg("https://raw.githubusercontent.com/Nula-Lang/Nula/main/nula/library.nula")
+    .output();
+
+    match curl_output {
+        Ok(o) if o.status.success() => print_note("Library index downloaded"),
+        Ok(o) => {
+            print_error(&String::from_utf8_lossy(&o.stderr).to_string());
+            return;
+        }
         Err(e) => {
-            print_error(&format!("Failed to execute nula-go: {}", e));
+            print_error(&format!("Failed to execute curl: {}", e));
+            return;
+        }
+    }
+
+    let content = match fs::read_to_string(temp_file) {
+        Ok(c) => c,
+        Err(e) => {
+            print_error(&format!("Failed to read index: {}", e));
             return;
         }
     };
 
-    if output.status.success() {
-        print_success(&format!("Installed dependency '{}'", dep));
-    } else {
-        print_error(&String::from_utf8_lossy(&output.stderr).to_string());
+    let mut repo_url = None;
+    for line in content.lines() {
+        let parts: Vec<&str> = line.split("_>").collect();
+        if parts.len() == 2 && parts[0].trim() == dep {
+            repo_url = Some(parts[1].trim().to_string());
+            break;
+        }
     }
+
+    let Some(url) = repo_url else {
+        print_error(&format!("Dependency '{}' not found in index", dep));
+        return;
+    };
+
+    let folder = url.split('/').last().unwrap_or(dep).replace(".git", "");
+    let install_path = format!("/usr/lib/nula/{}", folder);
+
+    if Path::new(&install_path).exists() {
+        print_warning(&format!("Dependency '{}' already installed", dep));
+        return;
+    }
+
+    print_info(&format!("Cloning {} into {}...", url, install_path));
+    let git_output = Command::new("git")
+    .arg("clone")
+    .arg("--quiet")
+    .arg(&url)
+    .arg(&install_path)
+    .output();
+
+    match git_output {
+        Ok(o) if o.status.success() => print_success(&format!("Installed dependency '{}'", dep)),
+        Ok(o) => {
+            print_error(&String::from_utf8_lossy(&o.stderr).to_string());
+            return;
+        }
+        Err(e) => {
+            print_error(&format!("Failed to execute git: {}", e));
+            return;
+        }
+    }
+}
+
+pub fn remove_dependency(args: &[String]) {
+    if args.len() < 3 {
+        print_warning("Usage: nula remove <dependency>");
+        return;
+    }
+    let dep = &args[2];
+    let temp_file = "/tmp/library.nula";
+
+    print_info("Downloading library index...");
+    let curl_output = Command::new("curl")
+    .arg("-s")
+    .arg("-o")
+    .arg(temp_file)
+    .arg("https://raw.githubusercontent.com/Nula-Lang/Nula/main/nula/library.nula")
+    .output();
+
+    match curl_output {
+        Ok(o) if o.status.success() => print_note("Library index downloaded"),
+        Ok(o) => {
+            print_error(&String::from_utf8_lossy(&o.stderr).to_string());
+            return;
+        }
+        Err(e) => {
+            print_error(&format!("Failed to execute curl: {}", e));
+            return;
+        }
+    }
+
+    let content = match fs::read_to_string(temp_file) {
+        Ok(c) => c,
+        Err(e) => {
+            print_error(&format!("Failed to read index: {}", e));
+            return;
+        }
+    };
+
+    let mut folder = dep.to_string();
+    for line in content.lines() {
+        let parts: Vec<&str> = line.split("_>").collect();
+        if parts.len() == 2 && parts[0].trim() == dep {
+            folder = parts[1].trim().split('/').last().unwrap_or(dep).replace(".git", "");
+            break;
+        }
+    }
+
+    let install_path = format!("/usr/lib/nula/{}", folder);
+
+    if !Path::new(&install_path).exists() {
+        print_warning(&format!("Dependency '{}' not installed", dep));
+        return;
+    }
+
+    print_info(&format!("Removing dependency '{}'...", dep));
+    if let Err(e) = fs::remove_dir_all(&install_path) {
+        print_error(&format!("Failed to remove directory: {}", e));
+        return;
+    }
+
+    print_success(&format!("Removed dependency '{}'", dep));
 }
 
 pub fn build_project(args: &[String]) {
@@ -79,6 +200,8 @@ pub fn build_project(args: &[String]) {
         print_error("Must be in a Nula project directory (missing nula.toml or main.nula)");
         return;
     }
+
+    let start = Instant::now();
 
     let release = args.iter().any(|a| a == "--release");
     let target = args
@@ -89,11 +212,12 @@ pub fn build_project(args: &[String]) {
     print_info("Resolving dependencies...");
     resolve_dependencies();
 
-    print_info("Finding .nula files...");
+    print_info("Scanning for .nula files...");
     let mut nula_files = vec![];
-    if let Err(e) = walk_dir(Path::new("."), &mut nula_files) {
-        print_error(&format!("Failed to walk directory: {}", e));
-        return;
+    for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
+        if entry.path().extension().and_then(|s| s.to_str()) == Some("nula") {
+            nula_files.push(entry.path().to_path_buf());
+        }
     }
 
     if nula_files.is_empty() {
@@ -102,7 +226,8 @@ pub fn build_project(args: &[String]) {
     }
 
     for file in &nula_files {
-        print_info(&format!("Parsing {:?}...", file));
+        print_compiling(file.to_str().unwrap_or("unknown"));
+        print_info(&format!("Parsing {:?}", file));
         let ast = match parse_nula_file(file) {
             Ok(a) => a,
             Err(err) => {
@@ -112,12 +237,13 @@ pub fn build_project(args: &[String]) {
         };
 
         let optimized_ast = if release {
+            print_info("Optimizing AST...");
             optimize_ast(&ast)
         } else {
             ast
         };
 
-        print_info(&format!("Generating assembly for {:?}...", file));
+        print_info(&format!("Generating assembly for {:?}", file));
         let asm_code = generate_assembly(&optimized_ast, release, target.as_deref());
 
         let asm_path = file.with_extension("s");
@@ -173,11 +299,14 @@ pub fn build_project(args: &[String]) {
         };
 
         if gcc_output.status.success() {
-            print_success(&format!("Built {:?} successfully", bin_path));
+            print_success(&format!("Built {:?}", bin_path));
         } else {
             print_error(&String::from_utf8_lossy(&gcc_output.stderr).to_string());
         }
     }
+
+    let duration = start.elapsed().as_secs_f64();
+    print_finished(if release { "release" } else { "dev" }, duration);
 }
 
 pub fn run_project(args: &[String]) {
@@ -197,7 +326,7 @@ pub fn run_project(args: &[String]) {
         return;
     }
 
-    print_info(&format!("Parsing and running {:?}...", file_path));
+    print_info(&format!("Parsing and running {:?}", file_path));
     let ast = match parse_nula_file(&file_path) {
         Ok(a) => a,
         Err(err) => {
@@ -211,10 +340,11 @@ pub fn run_project(args: &[String]) {
 
 pub fn resolve_dependencies() {
     let nula_go = get_nula_go_path();
+    print_info("Resolving dependencies with nula-go...");
     let output = match Command::new(&nula_go).arg("resolve").output() {
         Ok(o) => o,
         Err(e) => {
-            print_error(&format!("Failed to execute nula-go for resolve: {}", e));
+            print_error(&format!("Failed to execute nula-go: {}", e));
             return;
         }
     };
@@ -224,17 +354,4 @@ pub fn resolve_dependencies() {
     } else {
         print_error(&String::from_utf8_lossy(&output.stderr).to_string());
     }
-}
-
-fn walk_dir(dir: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            walk_dir(&path, files)?;
-        } else if path.extension().and_then(|s| s.to_str()) == Some("nula") {
-            files.push(path);
-        }
-    }
-    Ok(())
 }
