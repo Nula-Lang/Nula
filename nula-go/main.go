@@ -60,7 +60,7 @@ func main() {
 		case "help":
 			printHelp()
 		default:
-			fmt.Println("Unknown command:", cmd)
+			fmt.Printf("Unknown command: %s\n", cmd)
 			printHelp()
 	}
 }
@@ -155,6 +155,10 @@ func installDep(dep, version string) {
 		}
 		return
 	}
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("Error reading index: %v\n", err)
+		return
+	}
 	fmt.Printf("Dep %s not found\n", dep)
 }
 
@@ -237,19 +241,28 @@ func resolveAllDeps() {
 func listDeps() {
 	entries, err := os.ReadDir(libDir)
 	if err != nil {
-		fmt.Printf("Failed to list: %v\n", err)
+		fmt.Printf("Failed to read lib directory %s: %v\n", libDir, err)
 		return
 	}
-	fmt.Println("Installed deps:")
+	if len(entries) == 0 {
+		fmt.Println("No dependencies installed")
+		return
+	}
+	fmt.Println("Installed dependencies:")
 	for _, entry := range entries {
 		if entry.IsDir() {
-			subEntries, _ := os.ReadDir(filepath.Join(libDir, entry.Name()))
-			if len(subEntries) > 0 {
-				for _, sub := range subEntries {
-					fmt.Printf("%s (%s)\n", entry.Name(), sub.Name())
+			depPath := filepath.Join(libDir, entry.Name())
+			versions, err := os.ReadDir(depPath)
+			if err != nil {
+				fmt.Printf("Failed to read versions for %s: %v\n", entry.Name(), err)
+				continue
+			}
+			for _, ver := range versions {
+				if ver.IsDir() {
+					fmt.Printf("%s %s\n", entry.Name(), ver.Name())
+				} else {
+					fmt.Printf("%s (no version)\n", entry.Name())
 				}
-			} else {
-				fmt.Println(entry.Name())
 			}
 		}
 	}
