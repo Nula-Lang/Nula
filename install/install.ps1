@@ -80,9 +80,9 @@ if ($process.ExitCode -eq 0) {
 }
 
 # Download files with vibrant colors
-Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula-zig" "$env:TEMP\nula-install\nula-zig" "Nula Zig binary"
-Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula-go" "$env:TEMP\nula-install\nula-go" "Nula Go binary"
-Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula" "$env:TEMP\nula-install\nula" "Nula main binary"
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.3/nula-zig" "$env:TEMP\nula-install\nula-zig" "Nula Zig binary"
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.3/nula-go" "$env:TEMP\nula-install\nula-go" "Nula Go binary"
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.3/nula" "$env:TEMP\nula-install\nula" "Nula main binary"
 Download-WithSpinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula.png" "$env:TEMP\nula-install\nula.png" "Nula icon"
 Download-WithSpinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-terminal.sh" "$env:TEMP\nula-install\nula-terminal.sh" "Nula terminal script"
 Download-WithSpinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-lang.desktop" "$env:TEMP\nula-install\nula-lang.desktop" "Nula desktop file"
