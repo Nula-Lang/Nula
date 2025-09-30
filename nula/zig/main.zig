@@ -27,8 +27,8 @@ pub fn main() !void {
         const file_path = args[2];
 
         // Validate file extension (optional, but recommended)
-        if (!std.mem.endsWith(u8, file_path, ".asm")) {
-            std.debug.print("Warning: Input file '{s}' does not have .asm extension\n", .{file_path});
+        if (!std.mem.endsWith(u8, file_path, ".s")) {
+            std.debug.print("Warning: Input file '{s}' does not have .s extension\n", .{file_path});
         }
 
         var release = false;
@@ -172,3 +172,4 @@ fn pass_dead_code_elim(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
     // Placeholder for dead code elimination
     return try allocator.dupe(u8, input);
 }
+
