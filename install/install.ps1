@@ -1,6 +1,4 @@
-# PowerShell script for installing Nula Programming Language on Windows
-
-# Define ANSI color codes for vibrant output (Windows 10+ supports ANSI in PowerShell)
+# Extended ANSI color codes for vibrant look (PowerShell compatible)
 $RED = "`e[1;31m"
 $GREEN = "`e[1;32m"
 $YELLOW = "`e[1;33m"
@@ -8,158 +6,148 @@ $BLUE = "`e[1;34m"
 $PURPLE = "`e[1;35m"
 $CYAN = "`e[1;36m"
 $WHITE = "`e[1;37m"
-$ORANGE = "`e[38;5;208m"
-$PINK = "`e[38;5;199m"
-$TEAL = "`e[38;5;51m"
-$VIOLET = "`e[38;5;135m"
-$NC = "`e[0m"
+$ORANGE = "`e[1;38;5;208m"
+$PINK = "`e[1;38;5;199m"
+$TEAL = "`e[1;38;5;51m"
+$VIOLET = "`e[1;38;5;135m"
+$NC = "`e[0m" # No Color
 
-# Spinner animation (Unicode characters)
+# Unicode spinner (no emojis)
 $SPINNER = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
 
 # Function to display spinner
 function Show-Spinner {
     param (
-        [scriptblock]$Command,
-        [string]$Description
+        [System.Diagnostics.Process]$Process
     )
-    Write-Host "${ORANGE}┌─[DOWNLOAD]──${NC} ${YELLOW}$Description${NC}"
-    $job = Start-Job -ScriptBlock $Command
+    $delay = 0.1
     $i = 0
-    while ($job.State -eq "Running") {
-        Write-Host -NoNewline "`r${VIOLET}$($SPINNER[$i]) ${WHITE}Processing...${NC}"
+    while (-not $Process.HasExited) {
+        Write-Host "`r${VIOLET}$($SPINNER[$i]) ${WHITE}Processing...${NC}" -NoNewline
         $i = ($i + 1) % $SPINNER.Length
-        Start-Sleep -Milliseconds 100
+        Start-Sleep -Milliseconds ($delay * 1000)
     }
     Write-Host "`r" -NoNewline
-    $result = Receive-Job -Job $job -Wait
-    if ($job.State -eq "Completed" -and $result.Success) {
-        Write-Host "${GREEN}└─[SUCCESS]──${NC} Downloaded ${CYAN}$Description${NC}"
+}
+
+# Function to download files with spinner and color
+function Download-WithSpinner {
+    param (
+        [string]$Url,
+        [string]$Output,
+        [string]$Desc
+    )
+    Write-Host "${ORANGE}┌─[DOWNLOAD]──${NC} ${YELLOW}$Desc${NC}"
+    $process = Start-Process -FilePath "curl" -ArgumentList "-L", "--fail", "--show-error", "--progress-bar", $Url, "-o", $Output -NoNewWindow -PassThru
+    Show-Spinner -Process $process
+    if ($process.ExitCode -eq 0) {
+        Write-Host "${GREEN}└─[SUCCESS]──${NC} Downloaded ${CYAN}$Desc${NC}"
     } else {
-        Write-Host "${RED}└─[ERROR]──${NC} Failed to download ${CYAN}$Description${NC}"
+        Write-Host "${RED}└─[ERROR]──${NC} Failed to download ${CYAN}$Desc${NC}"
         exit 1
     }
 }
 
-# Fancy banner
+# Fancy banner with enhanced borders
 Write-Host "${BLUE}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${NC}"
 Write-Host "${PURPLE}          Nula Programming Language Installer                ${NC}"
 Write-Host "${BLUE}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
 Write-Host ""
 
+# Create Nula directory in home
+Write-Host "${PINK}┌─[INFO]──${NC} Creating ~/.nula/lib directory..."
+New-Item -ItemType Directory -Path "$env:USERPROFILE\.nula\lib" -Force | Out-Null
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "New-Item -ItemType Directory -Path '$env:USERPROFILE\.nula\lib' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+if ($process.ExitCode -eq 0) {
+    Write-Host "${GREEN}└─[SUCCESS]──${NC} Created ${TEAL}$env:USERPROFILE\.nula\lib${NC} directory"
+} else {
+    Write-Host "${RED}└─[ERROR]──${NC} Failed to create ${TEAL}$env:USERPROFILE\.nula\lib${NC} directory"
+    exit 1
+}
+
 # Create temporary directory
 Write-Host "${PINK}┌─[INFO]──${NC} Creating temporary directory..."
-$tempDir = "$env:TEMP\nula-install"
-New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-Set-Location $tempDir
-if ($?) {
+New-Item -ItemType Directory -Path "$env:TEMP\nula-install" -Force | Out-Null
+Set-Location "$env:TEMP\nula-install"
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "New-Item -ItemType Directory -Path '$env:TEMP\nula-install' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+if ($process.ExitCode -eq 0) {
     Write-Host "${GREEN}└─[SUCCESS]──${NC} Created temporary directory"
 } else {
     Write-Host "${RED}└─[ERROR]──${NC} Failed to create temporary directory"
     exit 1
 }
 
-# Download files with spinner
-$downloads = @(
-    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula-zig"; Path="$tempDir\nula-zig.exe"; Desc="Nula Zig binary"},
-    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula-go"; Path="$tempDir\nula-go.exe"; Desc="Nula Go binary"},
-    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula"; Path="$tempDir\nula.exe"; Desc="Nula main binary"},
-    @{Url="https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula.png"; Path="$tempDir\nula.png"; Desc="Nula icon"},
-    @{Url="https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-terminal.sh"; Path="$tempDir\nula-terminal.sh"; Desc="Nula terminal script"},
-    @{Url="https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-lang.desktop"; Path="$tempDir\nula-lang.desktop"; Desc="Nula desktop file"}
-)
+# Download files with vibrant colors
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula-zig" "$env:TEMP\nula-install\nula-zig" "Nula Zig binary"
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula-go" "$env:TEMP\nula-install\nula-go" "Nula Go binary"
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula" "$env:TEMP\nula-install\nula" "Nula main binary"
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula.png" "$env:TEMP\nula-install\nula.png" "Nula icon"
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-terminal.sh" "$env:TEMP\nula-install\nula-terminal.sh" "Nula terminal script"
+Download-WithSpinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-lang.desktop" "$env:TEMP\nula-install\nula-lang.desktop" "Nula desktop file"
 
-foreach ($download in $downloads) {
-    Show-Spinner -Command {
-        $wc = New-Object System.Net.WebClient
-        try {
-            $wc.DownloadFile($download.Url, $download.Path)
-            @{Success=$true}
-        } catch {
-            @{Success=$false}
-        }
-    } -Description $download.Desc
-}
-
-# Create Nula directory
+# Create Nula directory in Program Files
 Write-Host "${PINK}┌─[INFO]──${NC} Creating Nula directory..."
-$nulaDir = "C:\Program Files\Nula"
-New-Item -ItemType Directory -Path $nulaDir -Force | Out-Null
-$job = Start-Job { New-Item -ItemType Directory -Path $using:nulaDir -Force }
-$i = 0
-while ($job.State -eq "Running") {
-    Write-Host -NoNewline "`r${VIOLET}$($SPINNER[$i]) ${WHITE}Processing...${NC}"
-    $i = ($i + 1) % $SPINNER.Length
-    Start-Sleep -Milliseconds 100
-}
-Write-Host "`r" -NoNewline
-if ($job.State -eq "Completed") {
-    Write-Host "${GREEN}└─[SUCCESS]──${NC} Created ${TEAL}$nulaDir${NC} directory"
+New-Item -ItemType Directory -Path "$env:ProgramFiles\nula" -Force | Out-Null
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "New-Item -ItemType Directory -Path '$env:ProgramFiles\nula' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+if ($process.ExitCode -eq 0) {
+    Write-Host "${GREEN}└─[SUCCESS]──${NC} Created ${TEAL}$env:ProgramFiles\nula${NC} directory"
 } else {
-    Write-Host "${RED}└─[ERROR]──${NC} Failed to create ${TEAL}$nulaDir${NC} directory"
+    Write-Host "${RED}└─[ERROR]──${NC} Failed to create ${TEAL}$env:ProgramFiles\nula${NC} directory"
     exit 1
 }
 
-# Move files to appropriate locations
+# Update file permissions (PowerShell equivalent: setting execution attributes)
+Write-Host "${PINK}┌─[INFO]──${NC} Updating file permissions..."
+$files = @("$env:TEMP\nula-install\nula-terminal.sh", "$env:TEMP\nula-install\nula", "$env:TEMP\nula-install\nula-go", "$env:TEMP\nula-install\nula-zig")
+foreach ($file in $files) {
+    $process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Set-ItemProperty -Path '$file' -Name IsReadOnly -Value `$false" -NoNewWindow -PassThru
+    Show-Spinner -Process $process
+}
+Write-Host "${GREEN}└─[SUCCESS]──${NC} Permissions updated for all files"
+
+# Move files to system directories
 Write-Host "${PINK}┌─[INFO]──${NC} Moving files to system directories..."
-Move-Item -Path "$tempDir\nula.exe" -Destination "C:\Program Files\Nula\nula.exe" -Force
-Move-Item -Path "$tempDir\nula-zig.exe" -Destination "C:\Program Files\Nula\nula-zig.exe" -Force
-Move-Item -Path "$tempDir\nula-go.exe" -Destination "C:\Program Files\Nula\nula-go.exe" -Force
-Move-Item -Path "$tempDir\nula-terminal.sh" -Destination "$nulaDir\nula-terminal.sh" -Force
-Move-Item -Path "$tempDir\nula.png" -Destination "$nulaDir\nula.png" -Force
-Move-Item -Path "$tempDir\nula-lang.desktop" -Destination "$nulaDir\nula-lang.desktop" -Force
-$job = Start-Job { Move-Item -Path "$using:tempDir\*" -Destination "C:\Program Files\Nula" -Force }
-$i = 0
-while ($job.State -eq "Running") {
-    Write-Host -NoNewline "`r${VIOLET}$($SPINNER[$i]) ${WHITE}Processing...${NC}"
-    $i = ($i + 1) % $SPINNER.Length
-    Start-Sleep -Milliseconds 100
-}
-Write-Host "`r" -NoNewline
-if ($job.State -eq "Completed") {
-    Write-Host "${GREEN}└─[SUCCESS]──${NC} All files moved to their destinations"
-} else {
-    Write-Host "${RED}└─[ERROR]──${NC} Failed to move files"
-    exit 1
-}
+Move-Item -Path "$env:TEMP\nula-install\nula" -Destination "$env:ProgramFiles\nula\nula" -Force
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Move-Item -Path '$env:TEMP\nula-install\nula' -Destination '$env:ProgramFiles\nula\nula' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
 
-# Add Nula to PATH
-Write-Host "${PINK}┌─[INFO]──${NC} Adding Nula to system PATH..."
-$envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-if ($envPath -notlike "*$nulaDir*") {
-    [Environment]::SetEnvironmentVariable("Path", "$envPath;$nulaDir", "Machine")
-    Write-Host "${GREEN}└─[SUCCESS]──${NC} Added ${TEAL}$nulaDir${NC} to PATH"
-} else {
-    Write-Host "${YELLOW}└─[INFO]──${NC} ${TEAL}$nulaDir${NC} already in PATH"
-}
+Move-Item -Path "$env:TEMP\nula-install\nula-zig" -Destination "$env:USERPROFILE\.nula\lib\nula-zig" -Force
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Move-Item -Path '$env:TEMP\nula-install\nula-zig' -Destination '$env:USERPROFILE\.nula\lib\nula-zig' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+
+Move-Item -Path "$env:TEMP\nula-install\nula-go" -Destination "$env:USERPROFILE\.nula\lib\nula-go" -Force
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Move-Item -Path '$env:TEMP\nula-install\nula-go' -Destination '$env:USERPROFILE\.nula\lib\nula-go' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+
+Move-Item -Path "$env:TEMP\nula-install\nula-terminal.sh" -Destination "$env:ProgramFiles\nula\nula-terminal.sh" -Force
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Move-Item -Path '$env:TEMP\nula-install\nula-terminal.sh' -Destination '$env:ProgramFiles\nula\nula-terminal.sh' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+
+Move-Item -Path "$env:TEMP\nula-install\nula.png" -Destination "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\nula.png" -Force
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Move-Item -Path '$env:TEMP\nula-install\nula.png' -Destination '$env:APPDATA\Microsoft\Windows\Start Menu\Programs\nula.png' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+
+Move-Item -Path "$env:TEMP\nula-install\nula-lang.desktop" -Destination "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\nula-lang.desktop" -Force
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Move-Item -Path '$env:TEMP\nula-install\nula-lang.desktop' -Destination '$env:APPDATA\Microsoft\Windows\Start Menu\Programs\nula-lang.desktop' -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+
+Write-Host "${GREEN}└─[SUCCESS]──${NC} All files moved to their destinations"
 
 # Clean up
 Write-Host "${PINK}┌─[INFO]──${NC} Cleaning up temporary files..."
-Remove-Item -Path $tempDir -Recurse -Force
-$job = Start-Job { Remove-Item -Path $using:tempDir -Recurse -Force }
-$i = 0
-while ($job.State -eq "Running") {
-    Write-Host -NoNewline "`r${VIOLET}$($SPINNER[$i]) ${WHITE}Processing...${NC}"
-    $i = ($i + 1) % $SPINNER.Length
-    Start-Sleep -Milliseconds 100
-}
-Write-Host "`r" -NoNewline
+Remove-Item -Path "$env:TEMP\nula-install" -Recurse -Force
+$process = Start-Process -FilePath "powershell" -ArgumentList "-Command", "Remove-Item -Path '$env:TEMP\nula-install' -Recurse -Force" -NoNewWindow -PassThru
+Show-Spinner -Process $process
 Write-Host "${GREEN}└─[SUCCESS]──${NC} Temporary files removed"
 
-# Create desktop shortcut
-Write-Host "${PINK}┌─[INFO]──${NC} Creating desktop shortcut..."
-$WShell = New-Object -ComObject WScript.Shell
-$shortcut = $WShell.CreateShortcut("$env:USERPROFILE\Desktop\Nula.lnk")
-$shortcut.TargetPath = "C:\Program Files\Nula\nula.exe"
-$shortcut.IconLocation = "$nulaDir\nula.png"
-$shortcut.Save()
-Write-Host "${GREEN}└─[SUCCESS]──${NC} Desktop shortcut created"
-
-# Final message
+# Final message with enhanced borders
 Write-Host ""
 Write-Host "${BLUE}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${NC}"
 Write-Host "${GREEN}          Nula Programming Language Installed!               ${NC}"
-Write-Host "${CYAN} Run ${YELLOW}nula${NC} from PowerShell or double-click the desktop shortcut.${NC}"
+Write-Host "${CYAN} Run the ${YELLOW}nula${NC} command or launch ${YELLOW}Nula${NC} from your menu.${NC}"
 Write-Host "${BLUE}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
 
 # Wait for user to admire the output
@@ -168,15 +156,9 @@ Start-Sleep -Seconds 10
 
 # Test Nula installation
 Write-Host "${PINK}┌─[INFO]──${NC} Testing Nula installation..."
-$job = Start-Job { & "C:\Program Files\Nula\nula.exe" --version }
-$i = 0
-while ($job.State -eq "Running") {
-    Write-Host -NoNewline "`r${VIOLET}$($SPINNER[$i]) ${WHITE}Processing...${NC}"
-    $i = ($i + 1) % $SPINNER.Length
-    Start-Sleep -Milliseconds 100
-}
-Write-Host "`r" -NoNewline
-if ($job.State -eq "Completed") {
+$process = Start-Process -FilePath "$env:ProgramFiles\nula\nula" -ArgumentList "--version" -NoNewWindow -PassThru
+Show-Spinner -Process $process
+if ($process.ExitCode -eq 0) {
     Write-Host "${GREEN}└─[SUCCESS]──${NC} Nula is working perfectly!"
 } else {
     Write-Host "${RED}└─[ERROR]──${NC} Nula installation test failed. Please check the setup."
