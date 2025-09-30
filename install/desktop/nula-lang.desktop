@@ -1,8 +1,8 @@
 [Desktop Entry]
 Name=Nula Lang
 Comment=Uruchom język programownia nula
-Exec=/usr/bin/nula-terminal.sh
-Icon=
+Exec=/usr/lib/nula/nula-terminal.sh
+Icon=/usr/share/icons/nula.png
 Terminal=false
 Type=Application
 Categories=Utility;Development;
