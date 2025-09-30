@@ -61,9 +61,9 @@ if ($?) {
 
 # Download files with spinner
 $downloads = @(
-    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.1/nula-zig"; Path="$tempDir\nula-zig.exe"; Desc="Nula Zig binary"},
-    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.1/nula-go"; Path="$tempDir\nula-go.exe"; Desc="Nula Go binary"},
-    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.1/nula"; Path="$tempDir\nula.exe"; Desc="Nula main binary"},
+    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula-zig"; Path="$tempDir\nula-zig.exe"; Desc="Nula Zig binary"},
+    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula-go"; Path="$tempDir\nula-go.exe"; Desc="Nula Go binary"},
+    @{Url="https://github.com/Nula-Lang/Nula/releases/download/v0.2/nula"; Path="$tempDir\nula.exe"; Desc="Nula main binary"},
     @{Url="https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula.png"; Path="$tempDir\nula.png"; Desc="Nula icon"},
     @{Url="https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-terminal.sh"; Path="$tempDir\nula-terminal.sh"; Desc="Nula terminal script"},
     @{Url="https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-lang.desktop"; Path="$tempDir\nula-lang.desktop"; Desc="Nula desktop file"}
