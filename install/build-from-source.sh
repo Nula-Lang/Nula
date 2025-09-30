@@ -2,109 +2,231 @@
 
 set -e
 
-echo "[INFO] Checking distribution..."
+# ANSI color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Spinner function
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    while kill -0 "$pid" 2>/dev/null; do
+        for i in $(seq 0 9); do
+            printf "\r${CYAN}${spinstr:$i:1}${NC} $2"
+            sleep $delay
+        done
+    done
+    printf "\r${GREEN}✓${NC} $2\n"
+}
+
+# Run command with spinner in background
+run_with_spinner() {
+    local cmd="$1"
+    local msg="$2"
+    bash -c "$cmd" &
+    local pid=$!
+    spinner $pid "$msg"
+    wait $pid 2>/dev/null
+}
+
+echo -e "${BLUE}[INFO] Checking distribution...${NC}"
 
 # Detect package manager
 if [ -f /etc/os-release ]; then
     . /etc/os-release
-    DISTRO=$ID
+    DISTRO=$(echo "$ID" | tr '[:upper:]' '[:lower:]')
+elif [ -f /etc/lsb-release ]; then
+    . /etc/lsb-release
+    DISTRO=$(echo "$DISTRIB_ID" | tr '[:upper:]' '[:lower:]')
 else
-    DISTRO=$(uname -s)
+    DISTRO=$(uname -s | tr '[:upper:]' '[:lower:]')
 fi
 
-echo "[INFO] Distribution detected: $DISTRO"
+echo -e "${GREEN}[INFO] Distribution detected: $DISTRO${NC}"
 
 # Function to install dependencies
 install_dep() {
-    dep=$1
-    case "$DISTRO" in
-        hackeros|ubuntu|debian)
-            sudo apt update && sudo apt install -y $dep
+    local dep=$1
+    local pkg=$dep
+    case $dep in
+        go)
+            case "$DISTRO" in
+                ubuntu|debian|hackeros|zenit|kali|linuxmint|pop|elementary|zorinos|mx|deepin|parrot|raspbian|devuan|antix|peppermint|sparky)
+                    pkg="golang-go"
+                    ;;
+                arch|manjaro|endeavouros|kaos|alpine|freebsd|openbsd|netbsd|dragonfly|mageia|crux|slitaz|tinycore|artix|garuda|cachyos)
+                    pkg="go"
+                    ;;
+                *)
+                    pkg="golang"
+                    ;;
+            esac
             ;;
-        fedora)
-            sudo dnf install -y $dep
+        zig)
+            pkg="zig"
+            ;;
+        gcc)
+            pkg="gcc"
+            ;;
+        git)
+            pkg="git"
+            ;;
+        curl)
+            pkg="curl"
+            ;;
+    esac
+
+    case "$DISTRO" in
+        ubuntu|debian|hackeros|kali|linuxmint|pop|elementary|zorinos|mx|deepin|parrot|raspbian|devuan|antix|peppermint|sparky)
+            run_with_spinner "sudo apt update && sudo apt install -y $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        fedora|centos|rhel|almalinux|rockylinux|amzn|oraclelinux|nobara|ultramarine)
+            if command -v dnf &> /dev/null; then
+                run_with_spinner "sudo dnf install -y $pkg" "Installing $dep on $DISTRO..."
+            else
+                run_with_spinner "sudo yum install -y $pkg" "Installing $dep on $DISTRO..."
+            fi
             ;;
         fedora-silverblue)
-            echo "[INFO] Use rpm-ostree to install $dep manually."
+            echo -e "${YELLOW}[INFO] Use rpm-ostree to install $pkg manually on $DISTRO.${NC}"
             ;;
         zenit)
-            sudo zpm install-apt $dep
+            run_with_spinner "sudo zpm install-apt $pkg" "Installing $dep on $DISTRO..."
             ;;
-        opensuse|suse)
-            sudo zypper install -y $dep
+        opensuse*|suse)
+            run_with_spinner "sudo zypper install -y $pkg" "Installing $dep on $DISTRO..."
             ;;
-        arch|manjaro)
-            sudo pacman -Syu --noconfirm $dep
+        arch|manjaro|endeavouros|kaos|artix|garuda|cachyos)
+            run_with_spinner "sudo pacman -Syu --noconfirm $pkg" "Installing $dep on $DISTRO..."
             ;;
-        gentoo)
-            sudo emerge $dep
+        gentoo|sabayon|funtoo|calculate|chromeos)
+            run_with_spinner "sudo emerge $pkg" "Installing $dep on $DISTRO..."
             ;;
         slackware)
-            echo "[INFO] Install $dep manually using slackpkg or compile from source."
+            echo -e "${YELLOW}[INFO] Install $pkg manually using slackpkg or compile from source on $DISTRO.${NC}"
             ;;
-        Darwin)
-            brew install $dep
+        alpine)
+            run_with_spinner "sudo apk update && sudo apk add $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        solus)
+            run_with_spinner "sudo eopkg install -y $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        void)
+            run_with_spinner "sudo xbps-install -Sy $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        nixos)
+            echo -e "${YELLOW}[INFO] On NixOS, use nix-env -iA nixpkgs.$pkg or add to configuration.nix.${NC}"
+            ;;
+        guix)
+            echo -e "${YELLOW}[INFO] On Guix, use guix install $pkg.${NC}"
+            ;;
+        freebsd|dragonfly)
+            run_with_spinner "sudo pkg install -y $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        openbsd)
+            run_with_spinner "sudo pkg_add $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        netbsd)
+            run_with_spinner "sudo pkgin install $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        darwin|macos)
+            if ! command -v brew &> /dev/null; then
+                echo -e "${CYAN}[INFO] Installing Homebrew...${NC}"
+                run_with_spinner "/bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)\"" "Installing Homebrew..."
+            fi
+            run_with_spinner "brew install $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        mageia)
+            run_with_spinner "sudo urpmi --auto $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        pclinuxos)
+            run_with_spinner "sudo apt-get update && sudo apt-get install -y $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        crux)
+            run_with_spinner "sudo prt-get depinst $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        slitaz)
+            run_with_spinner "sudo tazpkg get-install $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        tinycore)
+            run_with_spinner "tce-load -wi $pkg.tcz" "Installing $dep on $DISTRO..."
+            ;;
+        clear-linux-os)
+            echo -e "${YELLOW}[INFO] For Clear Linux, use swupd bundle-add devpkg-$dep or similar manually.${NC}"
+            ;;
+        openindiana|illumos|solaris)
+            run_with_spinner "sudo pkg install $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        haiku)
+            run_with_spinner "pkgman install $pkg" "Installing $dep on $DISTRO..."
+            ;;
+        minix)
+            echo -e "${YELLOW}[INFO] On Minix, use pkgin install $pkg or compile from source manually.${NC}"
             ;;
         *)
-            echo "[WARN] Unknown distribution. Please install $dep manually."
+            echo -e "${RED}[WARN] Unknown distribution: $DISTRO. Please install $pkg manually.${NC}"
             ;;
     esac
 }
 
 # Required dependencies
-deps=(go zig gcc)
+deps=(git curl go zig gcc)
 
 # Check and install dependencies
-echo "[INFO] Checking and installing dependencies..."
+echo -e "${BLUE}[INFO] Checking and installing dependencies...${NC}"
 for dep in "${deps[@]}"; do
     if ! command -v $dep &> /dev/null; then
-        echo "[INFO] $dep not found, installing..."
+        echo -e "${YELLOW}[INFO] $dep not found, installing...${NC}"
         install_dep $dep
     else
-        echo "[INFO] $dep is already installed."
+        echo -e "${GREEN}[INFO] $dep is already installed.${NC}"
     fi
 done
 
 # Check Rust
 if ! command -v rustc &> /dev/null; then
-    echo "[INFO] Rust not found, installing via rustup..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+    echo -e "${YELLOW}[INFO] Rust not found, installing via rustup...${NC}"
+    run_with_spinner "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable" "Installing Rust..."
     source $HOME/.cargo/env
 else
-    echo "[INFO] Rust is already installed."
+    echo -e "${GREEN}[INFO] Rust is already installed.${NC}"
 fi
 
 # Clone repository
-echo "[RUN] Cloning the repository..."
-git clone https://github.com/Nula-Lang/Nula.git /tmp/Nula
+echo -e "${BLUE}[RUN] Cloning the repository...${NC}"
+run_with_spinner "git clone https://github.com/Nula-Lang/Nula.git /tmp/Nula" "Cloning Nula repository..."
 cd /tmp/Nula
 
 # Build Nula
-
-echo "[RUN] Building nula (Go)..."
+echo -e "${BLUE}[RUN] Building nula (Go)...${NC}"
 cd /tmp/Nula/nula/go/
 if [ ! -f go.mod ]; then
-    go mod init example.com/m/v2
+    run_with_spinner "go mod init example.com/m/v2" "Initializing Go module..."
 fi
-go mod tidy
-go build
+run_with_spinner "go mod tidy" "Tidying Go modules..."
+run_with_spinner "go build" "Building nula (Go)..."
 sudo mv m nula-go
 sudo chmod a+x nula-go
-sudo mv /tmp/Nula/nula/nula-go /usr/bin/
-cd /tmp/Nula/nula/zig/
+sudo mv nula-go /usr/bin/
 
-echo "[RUN] Building nula (Zig)..."
-zig build-exe main.zig -O ReleaseFast
+cd /tmp/Nula/nula/zig/
+echo -e "${BLUE}[RUN] Building nula (Zig)...${NC}"
+run_with_spinner "zig build-exe main.zig -O ReleaseFast" "Building nula (Zig)..."
 sudo mv main nula-zig
 sudo chmod a+x nula-zig
-sudo mv tmp/Nula/nula/nula-zig /usr/bin/
+sudo mv nula-zig /usr/bin/
 
 cd /tmp/Nula/nula/
-echo "[RUN] Building nula (Rust)..."
-cargo build --release
-cd /tmp/Nula/nula/target/release/
+echo -e "${BLUE}[RUN] Building nula (Rust)...${NC}"
+run_with_spinner "cargo build --release" "Building nula (Rust)..."
+cd target/release/
 sudo chmod a+x nula
-sudo mv /tmp/Nula/nula/target/release/nula /usr/bin/
+sudo mv nula /usr/bin/
 
-echo "[INFO] The operation has been completed."
-echo "[PLEASE] Run the nula command or launch the application from the nula program menu."
+echo -e "${GREEN}[INFO] The operation has been completed successfully!${NC}"
+echo -e "${CYAN}[PLEASE] Run the nula command or launch the application from the nula program menu.${NC}"
