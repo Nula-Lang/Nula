@@ -5,12 +5,12 @@
 === For Windows
 [source,bash]
 ----
-curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.ps1
+curl -L -o /tmp/install.ps1 https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.ps1
 ----
 ==== For Linux/Unix/Macos
 [source,bash]
 ----
-curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh
+curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh
 ----
 == Building from source
 === For Windows
