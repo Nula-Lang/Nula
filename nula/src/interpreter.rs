@@ -89,3 +89,4 @@ fn interpret_block(block: &str, vars: &mut HashMap<String, i64>) {
         }
     }
 }
+
