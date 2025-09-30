@@ -10,7 +10,7 @@ dependency = { "<" ~ (ident | file_path) ~ ">" }
 
 import_stmt = { "import" ~ (ident | file_path) }
 
-statement = { (variable_decl | function_def | loop_stmt | conditional | write_stmt | add_stmt | mul_stmt | expression | return_stmt | COMMENT) ~ ";"? }
+statement = { (variable_decl | function_def | loop_stmt | conditional | write_stmt | add_stmt | mul_stmt | return_stmt | COMMENT | expression) ~ ";"? }
 
 variable_decl = { "var" ~ ident ~ "=" ~ expression }
 
@@ -31,11 +31,18 @@ mul_stmt = { "mul" ~ expression ~ expression }
 
 return_stmt = { "return" ~ expression? }
 
-expression = { string | number | bool | ident | call | binary_expr | unary_expr | paren_expr }
-binary_expr = { expression ~ bin_op ~ expression }
-bin_op = { "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "and" | "or" }
-unary_expr = { unary_op ~ expression }
+expression = { logic_expr }
+logic_expr = { compare_expr ~ (logic_op ~ compare_expr)* }
+logic_op = { "and" | "or" }
+compare_expr = { add_expr ~ (compare_op ~ add_expr)* }
+compare_op = { "==" | "!=" | "<" | ">" | "<=" | ">=" }
+add_expr = { mul_expr ~ (add_op ~ mul_expr)* }
+add_op = { "+" | "-" }
+mul_expr = { unary_expr ~ (mul_op ~ unary_expr)* }
+mul_op = { "*" | "/" }
+unary_expr = { unary_op ~ primary | primary }
 unary_op = { "-" | "not" }
+primary = { string | number | bool | ident | call | paren_expr }
 paren_expr = { "(" ~ expression ~ ")" }
 
 call = { ident ~ "(" ~ arg_list? ~ ")" }
