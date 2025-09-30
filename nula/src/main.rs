@@ -1,9 +1,6 @@
 use crate::cli::{print_error, print_help};
 use crate::commands::{build_project, create_project, install_dependency, resolve_dependencies, run_project};
 use crate::config::load_config;
-use crate::utils::get_nula_bin_path;
-use std::env;
-use std::path::PathBuf;
 
 mod cli;
 mod commands;
@@ -16,7 +13,7 @@ mod translator;
 mod utils;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
         print_help();
         return;
