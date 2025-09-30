@@ -1,4 +1,5 @@
 use colored::*;
+use std::env;
 
 pub fn print_help() {
     println!("{}", "Nula CLI Commands:".bold().green());
