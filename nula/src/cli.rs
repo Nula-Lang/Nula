@@ -15,7 +15,7 @@ pub fn print_help() {
     println!("  {:<12} - Install a dependency from Nula repository", "install <dep>".yellow());
     println!("  {:<12} - Remove an installed dependency", "remove <dep>".yellow());
     println!("  {:<12} - Resolve and install all project dependencies", "resolve".yellow());
-    println!("\n{}", "Visit https://nula-lang.org for more information".italic().blue());
+    println!("\n{}", "Visit https://nula-lang.github.io/Nula-Website/ for more information".italic().blue());
 }
 
 pub fn print_error(msg: &str) {
