@@ -2,35 +2,52 @@ use colored::*;
 use std::env;
 
 pub fn print_help() {
-    println!("{}", "Nula CLI Commands:".bold().green());
-    println!("  help / ?          - Show this help message");
-    println!("  build [options]   - Build the project to binary (must be in project dir)");
-    println!("    --release       - Build in release mode with optimizations");
-    println!("    --target <arch> - Specify target architecture (e.g., x86_64)");
-    println!("  run [file]        - Run .nula file without compilation (may be slower)");
-    println!("  create <name>     - Create a new Nula project folder");
-    println!("  install <dep>     - Install a dependency from Nula repo");
-    println!("  resolve           - Resolve and install all project dependencies");
+    println!("\n{}", "Nula CLI - A Modern Programming Language".bold().cyan().underline());
+    println!("{}", "=================================".cyan());
+    println!("{} {}", "Usage:".bold().white(), "nula <command> [options]".white());
+    println!("\n{}:", "Commands".bold().green());
+    println!("  {:<12} - Display this help message", "help / ?".yellow());
+    println!("  {:<12} - Build project to binary (must be in project dir)", "build".yellow());
+    println!("    {:<10} - Build in release mode with optimizations", "--release".magenta());
+    println!("    {:<10} - Specify target architecture (e.g., x86_64)", "--target <arch>".magenta());
+    println!("  {:<12} - Run a .nula file without compilation", "run [file]".yellow());
+    println!("  {:<12} - Create a new Nula project", "create <name>".yellow());
+    println!("  {:<12} - Install a dependency from Nula repository", "install <dep>".yellow());
+    println!("  {:<12} - Remove an installed dependency", "remove <dep>".yellow());
+    println!("  {:<12} - Resolve and install all project dependencies", "resolve".yellow());
+    println!("\n{}", "Visit https://nula-lang.org for more information".italic().blue());
 }
 
 pub fn print_error(msg: &str) {
-    eprintln!("{} {}", "Error:".red().bold(), msg.red());
+    eprintln!("{} {}", "error:".bold().red(), msg.white().on_red());
 }
 
 pub fn print_success(msg: &str) {
-    println!("{} {}", "Success:".green().bold(), msg.green());
+    println!("{} {}", "success:".bold().green(), msg.green());
 }
 
 pub fn print_warning(msg: &str) {
-    println!("{} {}", "Warning:".yellow().bold(), msg.yellow());
+    println!("{} {}", "warning:".bold().yellow(), msg.yellow());
 }
 
 pub fn print_info(msg: &str) {
-    println!("{} {}", "Info:".blue().bold(), msg.blue());
+    println!("{} {}", "info:".bold().blue(), msg.blue());
 }
 
 pub fn print_debug(msg: &str) {
     if env::var("NULA_DEBUG").is_ok() {
-        println!("{} {}", "Debug:".magenta().bold(), msg.magenta());
+        println!("{} {}", "debug:".bold().magenta(), msg.magenta());
     }
+}
+
+pub fn print_note(msg: &str) {
+    println!("{} {}", "note:".bold().cyan(), msg.cyan());
+}
+
+pub fn print_compiling(file: &str) {
+    println!("{} {}", "compiling:".bold().purple(), file.purple());
+}
+
+pub fn print_finished(mode: &str, time: f64) {
+    println!("{} {} in {:.2}s", "finished:".bold().green(), mode.green(), time);
 }
