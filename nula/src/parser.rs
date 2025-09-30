@@ -1,6 +1,7 @@
 use crate::cli::{print_debug, print_error};
 use crate::translator::translate_code;
 use pest::iterators::{Pair, Pairs};
+use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
 use pest_derive::Parser;
 use std::path::Path;
@@ -15,8 +16,10 @@ pub fn parse_nula_file(path: &Path) -> Result<String, pest::error::Error<Rule>> 
         Err(e) => {
             print_error(&format!("Failed to read file {:?}: {}", path, e));
             return Err(pest::error::Error::new_from_span(
-                pest::error::ErrorVariant::CustomError { message: e.to_string() },
-                pest::Span::new(&code, 0, 0).unwrap_or_else(|| pest::Span::new("", 0, 0).unwrap()),
+                pest::error::ErrorVariant::CustomError {
+                    message: e.to_string(),
+                },
+                pest::Span::new("", 0, 0).unwrap(),
             ));
         }
     };
@@ -91,7 +94,40 @@ fn process_pair(pair: Pair<Rule>, ast: &mut String) {
             process_pairs(pair.into_inner(), ast);
             ast.push('\n');
         }
-        Rule::expression | Rule::binary_expr | Rule::call => {
+        Rule::expression => {
+            let pratt = PrattParser::new()
+            .op(Op::infix(Rule::bin_op, Assoc::Left))
+            .op(Op::prefix(Rule::unary_expr));
+            let expr_str = pratt
+            .map_primary(|primary| match primary.as_rule() {
+                Rule::atom => primary.as_str().to_string(),
+                         Rule::call => {
+                             let mut call_str = String::new();
+                             for inner in primary.into_inner() {
+                                 match inner.as_rule() {
+                                     Rule::ident => call_str.push_str(inner.as_str()),
+                         Rule::expression => call_str.push_str(&format!("({})", inner.as_str())),
+                         _ => call_str.push_str(inner.as_str()),
+                                 }
+                             }
+                             call_str
+                         }
+                         Rule::paren_expr => format!("({})", primary.as_str()),
+                         _ => primary.as_str().to_string(),
+            })
+            .map_infix(|lhs, op, rhs| {
+                format!("{} {} {}", lhs, op.as_str(), rhs)
+            })
+            .map_prefix(|op, rhs| {
+                format!("{}{}", op.as_str(), rhs)
+            })
+            .parse(pair.into_inner());
+            ast.push_str(&expr_str);
+        }
+        Rule::binary_expr => {
+            process_pairs(pair.into_inner(), ast);
+        }
+        Rule::call => {
             process_pairs(pair.into_inner(), ast);
         }
         _ => {
