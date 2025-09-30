@@ -10,20 +10,21 @@ dependency = { "<" ~ (ident | file_path) ~ ">" }
 
 import_stmt = { "import" ~ (ident | file_path) }
 
-statement = { (variable_decl | function_def | loop_stmt | conditional | write_stmt | add_stmt | mul_stmt | return_stmt | COMMENT | expression) ~ ";"? }
+statement = { (variable_decl | assignment | function_def | loop_stmt | conditional | write_stmt | add_stmt | mul_stmt | return_stmt | COMMENT | expression) ~ ";"? }
 
 variable_decl = { "var" ~ ident ~ "=" ~ expression }
+assignment = { "set" ~ ident ~ "=" ~ expression }
 
 function_def = { "fn" ~ ident ~ "(" ~ param_list? ~ ")" ~ "{" ~ statement* ~ "}" }
 param_list = { ident ~ ("," ~ ident)* }
 
 loop_stmt = { for_loop | while_loop }
 for_loop = { "for" ~ ident ~ "in" ~ expression ~ "{" ~ statement* ~ "}" }
-while_loop = { "while" ~ expression ~ "{" ~ statement* ~ "}" }
+while_loop = { "while" ~ expression ~ ("{" ~ statement* ~ "}" | "do" ~ statement* ~ "end") }
 
-conditional = { "if" ~ expression ~ "{" ~ statement* ~ "}" ~ else_if* ~ else_clause? }
-else_if = { "else if" ~ expression ~ "{" ~ statement* ~ "}" }
-else_clause = { "else" ~ "{" ~ statement* ~ "}" }
+conditional = { "if" ~ expression ~ ("{" ~ statement* ~ "}" | "do" ~ statement* ~ "end") ~ else_if* ~ else_clause? }
+else_if = { "else if" ~ expression ~ ("{" ~ statement* ~ "}" | "do" ~ statement* ~ "end") }
+else_clause = { "else" ~ ("{" ~ statement* ~ "}" | "do" ~ statement* ~ "end") }
 
 write_stmt = { "write" ~ expression }
 add_stmt = { "add" ~ expression ~ expression }
@@ -33,9 +34,9 @@ return_stmt = { "return" ~ expression? }
 
 expression = { logic_expr }
 logic_expr = { compare_expr ~ (logic_op ~ compare_expr)* }
-logic_op = { "and" | "or" }
+logic_op = { "and" | "or" | "&&" | "||" }
 compare_expr = { add_expr ~ (compare_op ~ add_expr)* }
-compare_op = { "==" | "!=" | "<" | ">" | "<=" | ">=" }
+compare_op = { "==" | "!=" | "<" | ">" | "<=" | ">=" | "eq" | "ne" | "lt" | "gt" | "le" | "ge" }
 add_expr = { mul_expr ~ (add_op ~ mul_expr)* }
 add_op = { "+" | "-" }
 mul_expr = { unary_expr ~ (mul_op ~ unary_expr)* }
