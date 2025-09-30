@@ -1,4 +1,7 @@
+use crate::cli::print_info;
+
 pub fn translate_code(lang: &str, code: &str) -> String {
+    print_info(&format!("Translating {} code...", lang));
     let lower_lang = lang.to_lowercase();
     match lower_lang.as_str() {
         "python" => {
@@ -8,7 +11,7 @@ pub fn translate_code(lang: &str, code: &str) -> String {
             .replace("for ", "for ")
             .replace("while ", "while ")
             .replace(":", " {")
-            .replace("\n", ";\n") // Simplified
+            .replace("\n", ";\n")
         }
         "javascript" => {
             code.replace("console.log(", "write ")
