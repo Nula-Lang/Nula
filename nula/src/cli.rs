@@ -45,9 +45,29 @@ pub fn print_note(msg: &str) {
 }
 
 pub fn print_compiling(file: &str) {
-    println!("{} {}", "compiling:".bold().purple(), file.purple());
+    println!("{} {}", "Compiling".bold().purple(), file.purple());
+}
+
+pub fn print_parsing(file: &str) {
+    println!("{} {}", "Parsing".bold().cyan(), file.cyan());
+}
+
+pub fn print_optimizing() {
+    println!("{}", "Optimizing AST...".bold().yellow());
+}
+
+pub fn print_generating_asm(file: &str) {
+    println!("{} {}", "Generating assembly for".bold().green(), file.green());
+}
+
+pub fn print_assembling(file: &str) {
+    println!("{} {}", "Assembling".bold().blue(), file.blue());
+}
+
+pub fn print_linking(file: &str) {
+    println!("{} {}", "Linking".bold().magenta(), file.magenta());
 }
 
 pub fn print_finished(mode: &str, time: f64) {
-    println!("{} {} in {:.2}s", "finished:".bold().green(), mode.green(), time);
+    println!("{} {} in {:.2}s", "Finished".bold().green(), mode.green(), time);
 }
