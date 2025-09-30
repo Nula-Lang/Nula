@@ -1,5 +1,5 @@
 use crate::cli::{print_error, print_help};
-use crate::commands::{build_project, create_project, install_dependency, resolve_dependencies, run_project};
+use crate::commands::{build_project, create_project, install_dependency, remove_dependency, resolve_dependencies, run_project};
 use crate::config::load_config;
 
 mod cli;
@@ -32,6 +32,7 @@ fn main() {
         "run" => run_project(&args),
         "create" => create_project(&args),
         "install" => install_dependency(&args),
+        "remove" => remove_dependency(&args),
         "resolve" => resolve_dependencies(),
         _ => print_error(&format!("Unknown command: {}", command)),
     }
