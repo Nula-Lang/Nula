@@ -1,5 +1,25 @@
-write("Hello Nula!"); @ Greeting
-x = "world";
-write(x);
-<(the-racer)>
-# = python = {print("Translated!")}
+@ Calculate factorial of a number and demonstrate Nula features
+var n = 5;
+var result = 1;
+var i = 1;
+
+write "Calculating factorial of ";
+write n;
+
+while i <= n {
+    result = mul result i;
+    write "Step ";
+    write i;
+    write ": result = ";
+    write result;
+    i = add i 1;
+}
+
+if result == 120 {
+    write "Factorial of ";
+    write n;
+    write " is ";
+    write result;
+} else {
+    write "Unexpected result for factorial";
+}
