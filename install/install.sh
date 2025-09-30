@@ -52,6 +52,16 @@ echo -e "${PURPLE}          Nula Programming Language Installer                $
 echo -e "${BLUE}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
 echo
 
+# Create Nula directory in home
+echo -e "${PINK}┌─[INFO]──${NC} Creating ~/.nula/lib directory..."
+mkdir -p ~/.nula/lib & spinner $!
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}└─[SUCCESS]──${NC} Created ${TEAL}~/.nula/lib${NC} directory"
+else
+    echo -e "${RED}└─[ERROR]──${NC} Failed to create ${TEAL}~/.nula/lib${NC} directory"
+    exit 1
+fi
+
 # Create temporary directory
 echo -e "${PINK}┌─[INFO]──${NC} Creating temporary directory..."
 mkdir -p /tmp/nula-install & spinner $!
@@ -92,8 +102,8 @@ echo -e "${GREEN}└─[SUCCESS]──${NC} Permissions updated for all files"
 # Move files to system directories
 echo -e "${PINK}┌─[INFO]──${NC} Moving files to system directories..."
 sudo mv /tmp/nula-install/nula /usr/bin/ & spinner $!
-sudo mv /tmp/nula-install/nula-zig /usr/bin/ & spinner $!
-sudo mv /tmp/nula-install/nula-go /usr/bin/ & spinner $!
+mv /tmp/nula-install/nula-zig ~/.nula/lib/ & spinner $!
+mv /tmp/nula-install/nula-go ~/.nula/lib/ & spinner $!
 sudo mv /tmp/nula-install/nula-terminal.sh /usr/lib/nula/ & spinner $!
 sudo mv /tmp/nula-install/nula.png /usr/share/icons/ & spinner $!
 sudo mv /tmp/nula-install/nula-lang.desktop /usr/share/applications/ & spinner $!
