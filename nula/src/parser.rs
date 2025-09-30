@@ -1,14 +1,12 @@
 use crate::cli::{print_debug, print_error};
+use crate::process_expression::process_expression;
 use crate::translator::translate_code;
-use pest::iterators::{Pair, Pairs};
-use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
 use pest_derive::Parser;
 use std::path::Path;
 
 #[derive(Parser)]
 #[grammar = "nula.pest"]
-#[allow(non_camel_case_types)]
 pub struct NulaParser;
 
 pub fn parse_nula_file(path: &Path) -> Result<String, pest::error::Error<Rule>> {
@@ -20,7 +18,6 @@ pub fn parse_nula_file(path: &Path) -> Result<String, pest::error::Error<Rule>> 
                 pest::error::ErrorVariant::CustomError {
                     message: e.to_string(),
                 },
-                // Use an empty string span if file reading fails
                 pest::Span::new("", 0, 0).unwrap(),
             ));
         }
@@ -41,13 +38,13 @@ pub fn parse_nula_file(path: &Path) -> Result<String, pest::error::Error<Rule>> 
     Ok(ast)
 }
 
-fn process_pairs(pairs: Pairs<Rule>, ast: &mut String) {
+fn process_pairs(pairs: pest::iterators::Pairs<Rule>, ast: &mut String) {
     for pair in pairs {
         process_pair(pair, ast);
     }
 }
 
-fn process_pair(pair: Pair<Rule>, ast: &mut String) {
+fn process_pair(pair: pest::iterators::Pair<Rule>, ast: &mut String) {
     print_debug(&format!("Processing rule: {:?}", pair.as_rule()));
     match pair.as_rule() {
         Rule::translation => {
@@ -72,7 +69,7 @@ fn process_pair(pair: Pair<Rule>, ast: &mut String) {
         Rule::variable_decl => {
             let mut inner = pair.into_inner();
             let name = inner.next().map(|p| p.as_str()).unwrap_or("");
-            let value = inner.next().map(|p| p.as_str()).unwrap_or("");
+            let value = process_expression(inner.next().unwrap());
             ast.push_str(&format!("var {} = {}\n", name, value));
         }
         Rule::function_def => {
@@ -97,61 +94,27 @@ fn process_pair(pair: Pair<Rule>, ast: &mut String) {
             ast.push('\n');
         }
         Rule::write_stmt => {
-            let expr = pair.into_inner().next().map(|p| p.as_str()).unwrap_or("");
+            let expr = process_expression(pair.into_inner().next().unwrap());
             ast.push_str(&format!("write {}\n", expr));
         }
         Rule::add_stmt => {
             let mut inner = pair.into_inner();
-            let a = inner.next().map(|p| p.as_str()).unwrap_or("");
-            let b = inner.next().map(|p| p.as_str()).unwrap_or("");
+            let a = process_expression(inner.next().unwrap());
+            let b = process_expression(inner.next().unwrap());
             ast.push_str(&format!("add {} {}\n", a, b));
         }
         Rule::mul_stmt => {
             let mut inner = pair.into_inner();
-            let a = inner.next().map(|p| p.as_str()).unwrap_or("");
-            let b = inner.next().map(|p| p.as_str()).unwrap_or("");
+            let a = process_expression(inner.next().unwrap());
+            let b = process_expression(inner.next().unwrap());
             ast.push_str(&format!("mul {} {}\n", a, b));
         }
         Rule::return_stmt => {
-            let expr = pair.into_inner().next().map(|p| p.as_str()).unwrap_or("");
+            let expr = pair.into_inner().next().map(|p| process_expression(p)).unwrap_or_default();
             ast.push_str(&format!("return {}\n", expr));
         }
         Rule::expression => {
-            let pratt = PrattParser::new()
-            .op(Op::infix(Rule::bin_op, Assoc::Left) | Op::infix(Rule::mul_op, Assoc::Left))
-            .op(Op::prefix(Rule::unary_op));
-            let expr_str = pratt
-            .map_primary(|primary| match primary.as_rule() {
-                Rule::string => format!("\"{}\"", primary.as_str()),
-                         Rule::number | Rule::bool | Rule::ident => primary.as_str().to_string(),
-                         Rule::call => {
-                             let mut call_str = String::new();
-                             for inner in primary.into_inner() {
-                                 match inner.as_rule() {
-                                     Rule::ident => call_str.push_str(inner.as_str()),
-                         Rule::arg_list => {
-                             let args = inner
-                             .into_inner()
-                             .map(|a| a.as_str())
-                             .collect::<Vec<_>>()
-                             .join(", ");
-                             call_str.push_str(&format!("({})", args));
-                         }
-                         _ => call_str.push_str(inner.as_str()),
-                                 }
-                             }
-                             call_str
-                         }
-                         Rule::paren_expr => format!("({})", primary.into_inner().next().unwrap().as_str()),
-                         _ => primary.as_str().to_string(),
-            })
-            .map_infix(|lhs, op, rhs| {
-                format!("{} {} {}", lhs, op.as_str(), rhs)
-            })
-            .map_prefix(|op, rhs| {
-                format!("{}{}", op.as_str(), rhs)
-            })
-            .parse(pair.into_inner());
+            let expr_str = process_expression(pair);
             ast.push_str(&expr_str);
         }
         _ => {}
