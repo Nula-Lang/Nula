@@ -10,3 +10,4 @@ colored = "2.0.0"
 directories = "5.0.1"
 walkdir = "2.3.3"
 toml = "0.8.0"
+inkwell = { version = "0.1", features = ["llvm15-0"] }
