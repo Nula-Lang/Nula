@@ -1,25 +1,52 @@
-@ Calculate factorial of a number and demonstrate Nula features
-var n = 5;
-var result = 1;
-var i = 1;
+@ This is comment in Nula Lang
 
-write "Calculating factorial of ";
-write n;
-
-while i <= n {
-    result = mul result i;
-    write "Step ";
-    write i;
-    write ": result = ";
-    write result;
-    i = add i 1;
+#=HELLO= {
+    write "Welcome in Nula Programing Language!";
 }
 
-if result == 120 {
-    write "Factorial of ";
-    write n;
-    write " is ";
-    write result;
-} else {
-    write "Unexpected result for factorial";
+<math_utils.nula>
+import std/io
+
+var x = 10
+var y = 20
+var z = add x y
+var wynik = mul z 2
+
+fn greet(name) {
+    write "Cześć, " + name;
+}
+
+fn factorial(n) {
+    if n == 0 {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}
+
+fn main() {
+    write "Start programu";
+
+    greet("Michał");
+
+    write "Wynik dodawania: " + z;
+    write "Wynik mnożenia: " + wynik;
+
+    var f = factorial(5);
+    write "Silnia z 5 to: " + f;
+
+    for i in 1 {
+        if i < 5 {
+            write "Iteracja: " + i;
+        } else {
+            write "Koniec pętli";
+        }
+    }
+
+    while x > 0 {
+        write "x = " + x;
+        x = x - 1;
+    }
+
+    return;
 }
