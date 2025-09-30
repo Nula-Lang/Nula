@@ -37,19 +37,19 @@ func main() {
 
 	cmd := os.Args[1]
 	switch cmd {
-	case "install":
-		if len(os.Args) < 3 {
-			fmt.Println("Usage: nula-go install <dep>")
-			return
-		}
-		dep := os.Args[2]
-		installDep(dep)
-	case "resolve":
-		resolveAllDeps()
-	case "list":
-		listDeps()
-	default:
-		fmt.Println("Unknown command:", cmd)
+		case "install":
+			if len(os.Args) < 3 {
+				fmt.Println("Usage: nula-go install <dep>")
+				return
+			}
+			dep := os.Args[2]
+			installDep(dep)
+		case "resolve":
+			resolveAllDeps()
+		case "list":
+			listDeps()
+		default:
+			fmt.Println("Unknown command:", cmd)
 	}
 }
 
@@ -78,24 +78,52 @@ func installDep(dep string) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		parts := strings.SplitN(line, " -> ", 2)
-		if len(parts) == 2 && strings.TrimSpace(parts[0]) == dep {
-			url := strings.TrimSpace(parts[1])
-			clonePath := filepath.Join(libDir, dep)
-			if _, err := os.Stat(clonePath); err == nil {
-				fmt.Printf("%s already installed at %s\n", dep, clonePath)
-				return
-			}
-			cloneCmd := exec.Command("git", "clone", "--depth=1", url, clonePath)
-			cloneCmd.Stdout = os.Stdout
-			cloneCmd.Stderr = os.Stderr
-			if err := cloneCmd.Run(); err != nil {
-				fmt.Printf("Failed to clone %s: %v\n", dep, err)
-				return
-			}
-			fmt.Printf("Installed %s from %s to %s\n", dep, url, clonePath)
+		parts := strings.SplitN(line, "_>", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		left := strings.TrimSpace(parts[0])
+		url := strings.TrimSpace(parts[1])
+		leftParts := strings.SplitN(left, ":", 2)
+		if len(leftParts) != 2 || strings.TrimSpace(leftParts[0]) != dep {
+			continue
+		}
+		typ := strings.TrimSpace(leftParts[1])
+		installPath := filepath.Join(libDir, dep)
+		if _, err := os.Stat(installPath); err == nil {
+			fmt.Printf("%s already installed at %s\n", dep, installPath)
 			return
 		}
+		if err := os.MkdirAll(installPath, 0755); err != nil {
+			fmt.Printf("Failed to create install dir %s: %v\n", installPath, err)
+			return
+		}
+		switch typ {
+			case "git":
+				cloneCmd := exec.Command("git", "clone", "--depth=1", url, installPath)
+				cloneCmd.Stdout = os.Stdout
+				cloneCmd.Stderr = os.Stderr
+				if err := cloneCmd.Run(); err != nil {
+					fmt.Printf("Failed to clone %s: %v\n", dep, err)
+					return
+				}
+				fmt.Printf("Installed git dep %s from %s to %s\n", dep, url, installPath)
+			case "bin":
+				filename := filepath.Base(url)
+				destPath := filepath.Join(installPath, filename)
+				curlBinCmd := exec.Command("curl", "-L", "-o", destPath, url)
+				curlBinCmd.Stdout = os.Stdout
+				curlBinCmd.Stderr = os.Stderr
+				if err := curlBinCmd.Run(); err != nil {
+					fmt.Printf("Failed to download bin %s: %v\n", dep, err)
+					return
+				}
+				fmt.Printf("Installed bin dep %s from %s to %s\n", dep, url, destPath)
+			default:
+				fmt.Printf("Unknown type %s for dep %s\n", typ, dep)
+				return
+		}
+		return
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Printf("Error reading library: %v\n", err)
