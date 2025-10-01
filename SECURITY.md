@@ -179,7 +179,7 @@ We welcome contributions to improve Nula’s security. To contribute:
 ## Contact Information
 
 For security-related inquiries:
-- **Email**: [security@nula-lang.org](mailto:security@nula-lang.org)
+- **Email**: [voidarcstudio@gmail.com](mailto:voidarcstudio@gmail.com)
 - **GitHub**: [https://github.com/Nula-Lang/Nula/](https://github.com/Nula-Lang/Nula/)
 - **PGP Key**: Available in the repository’s SECURITY.md
 
