@@ -64,22 +64,6 @@ curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main
 cd /tmp && sudo chmod +x ./install.sh && ./install.sh
 ----
 
-==== Linux Atomic Distributions
-
-Atomic distributions require a slight modification to the script before execution.
-
-.Download and Modify the Script
-[source,bash]
-----
-curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/install.sh
-----
-
-.Run the Script
-[source,bash]
-----
-cd /tmp && sudo chmod +x ./install.sh && ./install.sh
-----
-
 === Building from Source
 
 If you prefer to build Nula from source code, follow these steps. This is recommended for developers or those who want the latest features.
