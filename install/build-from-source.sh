@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 # ANSI color codes
@@ -36,10 +35,13 @@ run_with_spinner() {
 
 echo -e "${BLUE}[INFO] Checking distribution...${NC}"
 
-# Detect package manager
+# Detect package manager and distribution details
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     DISTRO=$(echo "$ID" | tr '[:upper:]' '[:lower:]')
+    if [ -n "$VARIANT_ID" ]; then
+        DISTRO="$DISTRO-$VARIANT_ID"
+    fi
 elif [ -f /etc/lsb-release ]; then
     . /etc/lsb-release
     DISTRO=$(echo "$DISTRIB_ID" | tr '[:upper:]' '[:lower:]')
@@ -48,6 +50,15 @@ else
 fi
 
 echo -e "${GREEN}[INFO] Distribution detected: $DISTRO${NC}"
+
+# Determine if this is an atomic/immutable distribution
+is_atomic=false
+case "$DISTRO" in
+    fedora-silverblue|fedora-kinoite|opensuse-microos|steamdeck|bottlesos|nixos|guix)
+        is_atomic=true
+        echo -e "${YELLOW}[INFO] Atomic/immutable distribution detected. Binaries will be placed in user-local paths.${NC}"
+        ;;
+esac
 
 # Function to install dependencies
 install_dep() {
@@ -80,7 +91,6 @@ install_dep() {
             pkg="curl"
             ;;
     esac
-
     case "$DISTRO" in
         ubuntu|debian|hackeros|kali|linuxmint|pop|elementary|zorinos|mx|deepin|parrot|raspbian|devuan|antix|peppermint|sparky)
             run_with_spinner "sudo apt update && sudo apt install -y $pkg" "Installing $dep on $DISTRO..."
@@ -92,14 +102,18 @@ install_dep() {
                 run_with_spinner "sudo yum install -y $pkg" "Installing $dep on $DISTRO..."
             fi
             ;;
-        fedora-silverblue)
-            echo -e "${YELLOW}[INFO] Use rpm-ostree to install $pkg manually on $DISTRO.${NC}"
+        fedora-silverblue|fedora-kinoite)
+            echo -e "${YELLOW}[INFO] On atomic Fedora variants like Silverblue/Kinoite, use rpm-ostree install $pkg and reboot, or layer it manually.${NC}"
+            echo -e "${YELLOW}[INFO] For development tools, consider using toolbox or distrobox.${NC}"
             ;;
         zenit)
             run_with_spinner "sudo zpm install-apt $pkg" "Installing $dep on $DISTRO..."
             ;;
-        opensuse*|suse)
+        opensuse*|suse|opensuse-microos)
             run_with_spinner "sudo zypper install -y $pkg" "Installing $dep on $DISTRO..."
+            if [ "$DISTRO" = "opensuse-microos" ]; then
+                echo -e "${YELLOW}[INFO] On MicroOS, consider using transactional-update for persistent changes.${NC}"
+            fi
             ;;
         arch|manjaro|endeavouros|kaos|artix|garuda|cachyos)
             run_with_spinner "sudo pacman -Syu --noconfirm $pkg" "Installing $dep on $DISTRO..."
@@ -120,7 +134,7 @@ install_dep() {
             run_with_spinner "sudo xbps-install -Sy $pkg" "Installing $dep on $DISTRO..."
             ;;
         nixos)
-            echo -e "${YELLOW}[INFO] On NixOS, use nix-env -iA nixpkgs.$pkg or add to configuration.nix.${NC}"
+            echo -e "${YELLOW}[INFO] On NixOS, use nix-env -iA nixpkgs.$pkg or add to configuration.nix and nixos-rebuild switch.${NC}"
             ;;
         guix)
             echo -e "${YELLOW}[INFO] On Guix, use guix install $pkg.${NC}"
@@ -192,7 +206,7 @@ done
 if ! command -v rustc &> /dev/null; then
     echo -e "${YELLOW}[INFO] Rust not found, installing via rustup...${NC}"
     run_with_spinner "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable" "Installing Rust..."
-    source $HOME/.cargo/env
+    source "$HOME/.cargo/env"
 else
     echo -e "${GREEN}[INFO] Rust is already installed.${NC}"
 fi
@@ -202,7 +216,10 @@ echo -e "${BLUE}[RUN] Cloning the repository...${NC}"
 run_with_spinner "git clone https://github.com/Nula-Lang/Nula.git /tmp/Nula" "Cloning Nula repository..."
 cd /tmp/Nula
 
-# Build Nula
+# Create user-local directories without sudo
+mkdir -p ~/.nula/lib/
+
+# Build Nula (Go)
 echo -e "${BLUE}[RUN] Building nula (Go)...${NC}"
 cd /tmp/Nula/nula/go/
 if [ ! -f go.mod ]; then
@@ -210,23 +227,35 @@ if [ ! -f go.mod ]; then
 fi
 run_with_spinner "go mod tidy" "Tidying Go modules..."
 run_with_spinner "go build" "Building nula (Go)..."
-sudo mv m nula-go
-sudo chmod a+x nula-go
-sudo mv nula-go /usr/bin/
+mv m nula-go
+chmod +x nula-go
+mv nula-go ~/.nula/lib/
 
+# Build Nula (Zig)
 cd /tmp/Nula/nula/zig/
 echo -e "${BLUE}[RUN] Building nula (Zig)...${NC}"
 run_with_spinner "zig build-exe main.zig -O ReleaseFast" "Building nula (Zig)..."
-sudo mv main nula-zig
-sudo chmod a+x nula-zig
-sudo mv nula-zig /usr/bin/
+mv main nula-zig
+chmod +x nula-zig
+mv nula-zig ~/.nula/lib/
 
+# Build Nula (Rust)
 cd /tmp/Nula/nula/
 echo -e "${BLUE}[RUN] Building nula (Rust)...${NC}"
 run_with_spinner "cargo build --release" "Building nula (Rust)..."
 cd target/release/
-sudo chmod a+x nula
-sudo mv nula /usr/bin/
+chmod +x nula
+
+# Install the Rust binary based on distribution type
+if $is_atomic; then
+    mkdir -p ~/.local/bin/
+    mv nula ~/.local/bin/
+    echo -e "${GREEN}[INFO] Installed nula binary to ~/.local/bin/ for atomic distribution.${NC}"
+    echo -e "${CYAN}[PLEASE] Ensure ~/.local/bin/ is in your PATH. Run 'nula' from there.${NC}"
+else
+    sudo mv nula /usr/bin/
+    echo -e "${GREEN}[INFO] Installed nula binary to /usr/bin/.${NC}"
+fi
 
 echo -e "${GREEN}[INFO] The operation has been completed successfully!${NC}"
 echo -e "${CYAN}[PLEASE] Run the nula command or launch the application from the nula program menu.${NC}"
