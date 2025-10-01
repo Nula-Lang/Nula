@@ -1,1 +1,6 @@
-
+[project]
+name = "nula-sample-project"
+version = "0.1.0"
+description = "A sample Nula project demonstrating basic configuration"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
