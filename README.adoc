@@ -5,22 +5,38 @@
 === For Windows
 [source,bash]
 ----
-curl -L -o /tmp/install.ps1 https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.ps1
+curl -L -o "$env:TEMP\install.ps1" https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.ps1
+----
+==== Run installation script
+----
+Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\install.ps1`""
 ----
 === For Linux/Unix/Macos
 [source,bash]
 ----
 curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh
 ----
-===
+==== RUn installation script
 ----
-curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh && 
+cd /tmp/ && sudo chmod a+x ./install.sh && ./install.sh
+----
+=== For Linux atomic distro
+----
+curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/install.sh
+----
+==== Run installation script
+----
+cd /tmp/ && sudo chmod a+x ./install.sh && ./install.sh
 ----
 == Building from source
 === For Windows
 [source,bash]
 ----
-curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.ps1
+curl -L -o "$env:TEMP\install.ps1" https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.ps1
+----
+==== Run installation script
+----
+Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\build-from-source.ps1`""
 ----
 === For Linux/Unix/Macos
 [source,bash]
@@ -31,6 +47,10 @@ curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang
 [source,bash]
 ----
 curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/build-from-source.sh
+----
+==== Run installation script 
+----
+cd /tmp/ && sudo chmod a+x ./install.sh && ./install.sh
 ----
 = About Nula
 Nula was created in 28.09.2025
