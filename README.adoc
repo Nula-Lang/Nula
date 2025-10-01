@@ -1,139 +1,298 @@
 = Nula - Programming Language
 
-:toc:
-:toclevels: 2
+:doctype: book
+:toc: left
+:toclevels: 4
+:sectnums:
 :icons: font
 :source-highlighter: rouge
+:sectanchors:
+:sectlinks:
 
 == Introduction
 
-**Nula** is a modern, easy-to-use programming language.
-It features a simple and readable syntax, performance close to C thanks to Zig, and the ability to run code in interpreted mode via Python.
-The language also allows for straightforward translation of code from other languages (e.g., Python) to Nula.
+**Nula** is a modern, user-friendly programming language designed for simplicity and efficiency. It boasts a clean and readable syntax, delivering performance comparable to C through the use of Zig, while also supporting interpreted execution via Python. Additionally, Nula facilitates easy translation of code from other languages, such as Python, directly into Nula syntax.
 
 Nula was created on September 28, 2025.
 
 === Key Features
-* *Syntax*: `write` instead of `print`
-* *Comments*: `@`
-* *Code Translation*: `# = python = {print("hi")}`
-* *Dependencies*: `<(dependency)>` or `bottles.nula`
-* *CLI Commands*: `help`, `build`, `run`, `create`, `install {dep}`
-* *Performance*: Close to C thanks to Zig
 
-== Installation
+* **Simple Syntax**: Uses intuitive commands like `write` instead of `print` for output.
+* **Comments**: Single-line comments start with `@`.
+* **Code Translation**: Embed and translate code from other languages using constructs like `# = python = {print("hi")}`.
+* **Dependency Management**: Import dependencies with `<(dependency)>` or via files like `bottles.nula`.
+* **CLI Tools**: Comprehensive command-line interface with commands such as `help`, `build`, `run`, `create`, and `install {dep}`.
+* **High Performance**: Achieves near-C performance by leveraging Zig for compilation.
+* **Interpreted Mode**: Run code interpretively using Python for quick testing and development.
+* **Cross-Platform**: Supports Windows, Linux, Unix, macOS, and atomic Linux distributions.
 
-=== Normal Installation
+== Installation Guide
+
+This section provides detailed instructions for installing Nula on various operating systems. Choose the method that suits your environment.
+
+=== Standard Installation
 
 ==== Windows
-Download and run the installation script:
 
-[source,bash]
+To install on Windows, download the installation script and execute it with administrative privileges.
+
+.Download the Script
+[source,powershell]
 ----
 curl -L -o "$env:TEMP\install.ps1" https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.ps1
 ----
 
-Run the installation script as administrator:
-
-[source,bash]
+.Run the Script as Administrator
+[source,powershell]
 ----
 Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\install.ps1`""
 ----
 
-==== Linux/Unix/macOS
-Download the installation script:
+==== Linux, Unix, and macOS
 
+For Unix-like systems, download the script to a temporary directory and run it with elevated permissions.
+
+.Download the Script
 [source,bash]
 ----
 curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh
 ----
 
-Run the installation script:
-
+.Run the Script
 [source,bash]
 ----
-cd /tmp/ && sudo chmod +x ./install.sh && ./install.sh
+cd /tmp && sudo chmod +x ./install.sh && ./install.sh
 ----
 
-==== Linux Atomic Distros
-Download and modify the installation script for atomic distros:
+==== Linux Atomic Distributions
 
+Atomic distributions require a slight modification to the script before execution.
+
+.Download and Modify the Script
 [source,bash]
 ----
 curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/install.sh
 ----
 
-Run the installation script:
-
+.Run the Script
 [source,bash]
 ----
-cd /tmp/ && sudo chmod +x ./install.sh && ./install.sh
+cd /tmp && sudo chmod +x ./install.sh && ./install.sh
 ----
 
 === Building from Source
 
-==== Windows
-Download and run the build-from-source script:
+If you prefer to build Nula from source code, follow these steps. This is recommended for developers or those who want the latest features.
 
-[source,bash]
+==== Windows
+
+.Download the Build Script
+[source,powershell]
 ----
 curl -L -o "$env:TEMP\build-from-source.ps1" https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.ps1
 ----
 
-Run the build script as administrator:
-
-[source,bash]
+.Run the Build Script as Administrator
+[source,powershell]
 ----
 Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\build-from-source.ps1`""
 ----
 
-==== Linux/Unix/macOS
-Download the build-from-source script:
+==== Linux, Unix, and macOS
 
+.Download the Build Script
 [source,bash]
 ----
 curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.sh
 ----
 
-Run the build script:
-
+.Run the Build Script
 [source,bash]
 ----
-cd /tmp/ && sudo chmod +x ./build-from-source.sh && ./build-from-source.sh
+cd /tmp && sudo chmod +x ./build-from-source.sh && ./build-from-source.sh
 ----
 
-==== Linux Atomic Distros
-Download and modify the build-from-source script for atomic distros:
+==== Linux Atomic Distributions
 
+.Download and Modify the Build Script
 [source,bash]
 ----
 curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/build-from-source.sh
 ----
 
-Run the build script:
-
+.Run the Build Script
 [source,bash]
 ----
-cd /tmp/ && sudo chmod +x ./build-from-source.sh && ./build-from-source.sh
+cd /tmp && sudo chmod +x ./build-from-source.sh && ./build-from-source.sh
 ----
-
-== Writing Programs in Nula
 
 [NOTE]
 ====
-This section is a placeholder for detailed syntax and examples. Refer to the official repository at https://github.com/Nula-Lang/Nula/ for the latest examples and full documentation.
+Building from source requires dependencies like Zig and Python to be installed on your system. Refer to the official Zig and Python documentation for installation instructions.
 ====
 
-A basic "Hello, World!" program in Nula:
+== Getting Started with Nula
+
+=== Basic Syntax
+
+Nula's syntax is designed to be intuitive and minimalistic, reducing the learning curve for new users.
+
+==== Outputting Text
+
+Instead of traditional `print` statements, Nula uses `write`:
 
 [source,nula]
 ----
 write "Hello, World!"
 ----
 
-To run it:
+==== Comments
+
+Comments are prefixed with `@`:
+
+[source,nula]
+----
+@ This is a comment
+write "This is visible"
+----
+
+==== Variables and Data Types
+
+While specific details on variables are not extensively documented, Nula likely supports basic types similar to Python, given its translation features. Example (inferred):
+
+[source,nula]
+----
+let x = 10
+let message = "Hello"
+write message + " " + x
+----
+
+=== Code Translation
+
+One of Nula's unique features is the ability to translate code from other languages inline.
+
+.Example: Translating Python Code
+[source,nula]
+----
+# = python = {print("Hello from Python!")}
+----
+
+This would be translated to Nula's equivalent: `write "Hello from Python!"`
+
+=== Managing Dependencies
+
+Dependencies can be included using angle brackets or specific files.
+
+.Example: Including a Dependency
+[source,nula]
+----
+<(math)>
+write math.sqrt(16)  @ Outputs 4
+----
+
+Alternatively, use package files like `bottles.nula` for managing multiple dependencies.
+
+== CLI Commands
+
+Nula provides a powerful command-line interface for managing projects and execution.
+
+[cols="1,3"]
+|===
+|Command |Description
+
+|`help`
+|Displays help information and available commands.
+
+|`build`
+|Compiles the Nula code to an executable using Zig for high performance.
+
+|`run`
+|Runs the Nula script in interpreted mode using Python.
+
+|`create`
+|Creates a new Nula project or file template.
+
+|`install {dep}`
+|Installs a specified dependency.
+|===
+
+.Example Usage
+[source,bash]
 ----
 nula run hello.nula
 ----
 
-For more details, explore the source code and examples in the repository.
+== Advanced Topics
+
+=== Performance Optimization
+
+By compiling with Zig, Nula achieves performance close to native C code. Use the `build` command for production deployments.
+
+=== Interpreted vs. Compiled Mode
+
+- **Interpreted (Python)**: Ideal for development and quick iterations.
+- **Compiled (Zig)**: For performance-critical applications.
+
+=== Translating from Other Languages
+
+Nula supports translation from languages like Python. This feature allows seamless migration of existing codebases.
+
+== Examples
+
+=== Hello World
+
+.File: hello.nula
+[source,nula]
+----
+write "Hello, World!"
+----
+
+.Run Command
+[source,bash]
+----
+nula run hello.nula
+----
+
+=== Simple Calculation with Translation
+
+.File: calc.nula
+[source,nula]
+----
+# = python = {
+def add(a, b):
+    return a + b
+print(add(5, 3))
+}
+----
+
+This translates the Python function and prints 8.
+
+== Contributing to Nula
+
+Nula is an open-source project hosted on GitHub at https://github.com/Nula-Lang/Nula/. Contributions are welcome! Check the repository for source code, issues, and pull requests.
+
+[TIP]
+====
+To contribute, fork the repository, make your changes, and submit a pull request.
+====
+
+== Frequently Asked Questions
+
+=== What makes Nula different from Rust or Zig?
+
+Nula combines the ease of rst with the speed of Zig, offering both interpreted and compiled modes in a simple syntax.
+
+=== Is Nula production-ready?
+
+As a new language (created in 2025), it's in early stages. Use for experimentation and provide feedback.
+
+=== Where can I find more examples?
+
+Explore the GitHub repository for any example files or contribute your own.
+
+== References
+
+- Official Repository: https://github.com/Nula-Lang/Nula/
+- Rust Documentation: https://doc.rust-lang.org/stable/
+- Zig Documentation: https://ziglang.org/
+- Go Documentation: https://golang.org/
