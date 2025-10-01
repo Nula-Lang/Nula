@@ -1,78 +1,139 @@
-= Nula - Programing Language
+= Nula - Programming Language
 
-= installation
-== Normal installation
-=== For Windows
-[source,bash]
-----
-curl -L -o "$env:TEMP\install.ps1" https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.ps1
-----
-==== Run installation script
-----
-Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\install.ps1`""
-----
-=== For Linux/Unix/Macos
-[source,bash]
-----
-curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh
-----
-==== RUn installation script
-----
-cd /tmp/ && sudo chmod a+x ./install.sh && ./install.sh
-----
-=== For Linux atomic distro
-----
-curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/install.sh
-----
-==== Run installation script
-----
-cd /tmp/ && sudo chmod a+x ./install.sh && ./install.sh
-----
-== Building from source
-=== For Windows
-[source,bash]
-----
-curl -L -o "$env:TEMP\install.ps1" https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.ps1
-----
-==== Run installation script
-----
-Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\build-from-source.ps1`""
-----
-=== For Linux/Unix/Macos
-[source,bash]
-----
-curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.sh
-----
-=== For Linux atomic distro
-[source,bash]
-----
-curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/build-from-source.sh
-----
-==== Run installation script 
-----
-cd /tmp/ && sudo chmod a+x ./install.sh && ./install.sh
-----
-= About Nula
-Nula was created in 28.09.2025
-
-= Nula Language Documentation
 :toc:
 :toclevels: 2
 :icons: font
 :source-highlighter: rouge
 
-== Wprowadzenie
-**Nula** to nowoczesny, bardzo łatwy w użyciu język programowania.  
-Cechuje się prostym i czytelnym syntaxem, wydajnością bliską C dzięki Zig oraz możliwością uruchamiania kodu w trybie interpretowanym dzięki Python.
+== Introduction
 
-Język pozwala również na tłumaczenie kodu z innych języków (np. Python) do Nula w prosty sposób.
+**Nula** is a modern, easy-to-use programming language.
+It features a simple and readable syntax, performance close to C thanks to Zig, and the ability to run code in interpreted mode via Python.
+The language also allows for straightforward translation of code from other languages (e.g., Python) to Nula.
 
-=== Kluczowe cechy
-* Syntax: `write` zamiast `print`
-* Komentarze: `@` 
-* Tłumaczenie kodu: `# = python = {print("hi")}`
-* Zależności: `<(zaleznosc)>` lub `bottles.nula`
-* Komendy CLI: `help`, `build`, `run`, `create`, `install {dep}`
-* Wydajność: blisko C dzięki Zig
+Nula was created on September 28, 2025.
 
-= Writing programs in nula
+=== Key Features
+* *Syntax*: `write` instead of `print`
+* *Comments*: `@`
+* *Code Translation*: `# = python = {print("hi")}`
+* *Dependencies*: `<(dependency)>` or `bottles.nula`
+* *CLI Commands*: `help`, `build`, `run`, `create`, `install {dep}`
+* *Performance*: Close to C thanks to Zig
+
+== Installation
+
+=== Normal Installation
+
+==== Windows
+Download and run the installation script:
+
+[source,bash]
+----
+curl -L -o "$env:TEMP\install.ps1" https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.ps1
+----
+
+Run the installation script as administrator:
+
+[source,bash]
+----
+Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\install.ps1`""
+----
+
+==== Linux/Unix/macOS
+Download the installation script:
+
+[source,bash]
+----
+curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh
+----
+
+Run the installation script:
+
+[source,bash]
+----
+cd /tmp/ && sudo chmod +x ./install.sh && ./install.sh
+----
+
+==== Linux Atomic Distros
+Download and modify the installation script for atomic distros:
+
+[source,bash]
+----
+curl -L -o /tmp/install.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/install.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/install.sh
+----
+
+Run the installation script:
+
+[source,bash]
+----
+cd /tmp/ && sudo chmod +x ./install.sh && ./install.sh
+----
+
+=== Building from Source
+
+==== Windows
+Download and run the build-from-source script:
+
+[source,bash]
+----
+curl -L -o "$env:TEMP\build-from-source.ps1" https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.ps1
+----
+
+Run the build script as administrator:
+
+[source,bash]
+----
+Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\build-from-source.ps1`""
+----
+
+==== Linux/Unix/macOS
+Download the build-from-source script:
+
+[source,bash]
+----
+curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.sh
+----
+
+Run the build script:
+
+[source,bash]
+----
+cd /tmp/ && sudo chmod +x ./build-from-source.sh && ./build-from-source.sh
+----
+
+==== Linux Atomic Distros
+Download and modify the build-from-source script for atomic distros:
+
+[source,bash]
+----
+curl -L -o /tmp/build-from-source.sh https://raw.githubusercontent.com/Nula-Lang/Nula/main/install/build-from-source.sh && sed -i 's/is_atomic=false/is_atomic=true/' /tmp/build-from-source.sh
+----
+
+Run the build script:
+
+[source,bash]
+----
+cd /tmp/ && sudo chmod +x ./build-from-source.sh && ./build-from-source.sh
+----
+
+== Writing Programs in Nula
+
+[NOTE]
+====
+This section is a placeholder for detailed syntax and examples. Refer to the official repository at https://github.com/Nula-Lang/Nula/ for the latest examples and full documentation.
+====
+
+A basic "Hello, World!" program in Nula:
+
+[source,nula]
+----
+write "Hello, World!"
+----
+
+To run it:
+----
+nula run hello.nula
+----
+
+For more details, explore the source code and examples in the repository.
