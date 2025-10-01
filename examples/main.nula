@@ -1,52 +1,34 @@
-@ This is comment in Nula Lang
+@ This is a sample Nula program demonstrating basic features
 
-#=HELLO= {
-    write "Welcome in Nula Programing Language!";
-}
+@ Import math library for calculations
+<(math)>
 
-<math_utils.nula>
-import std/io
-
-var x = 10
-var y = 20
-var z = add x y
-var wynik = mul z 2
-
-fn greet(name) {
-    write "Hi, " + name;
-}
-
-fn factorial(n) {
-    if n == 0 {
-        return 1;
-    } else {
-        return n * factorial(n - 1);
+@ Define a function to calculate factorial
+fun factorial(n) {
+    if n <= 1 {
+        return 1
     }
+    return n * factorial(n - 1)
 }
 
-fn main() {
-    write "Start programu";
+@ Main program
+let name = "User"
+let number = 5
 
-    greet("Nula");
+@ Greet the user
+write "Hello, " + name + "!"
 
-    write "Wynik dodawania: " + z;
-    write "Wynik mnożenia: " + wynik;
+@ Calculate and display square root
+write "Square root of 16 is: " + math.sqrt(16)
 
-    var f = factorial(5);
-    write "Silnia z 5 to: " + f;
+@ Calculate and display factorial
+write "Factorial of " + number + " is: " + factorial(number)
 
-    for i in 1 {
-        if i < 5 {
-            write "Iteracja: " + i;
-        } else {
-            write "Koniec pętli";
-        }
-    }
-
-    while x > 0 {
-        write "x = " + x;
-        x = x - 1;
-    }
-
-    return;
+@ Demonstrate a loop
+write "Counting from 1 to 5:"
+for i in 1..5 {
+    write i
 }
+
+@ Demonstrate code translation from Python
+# = python = {print("This is Python code running in Nula!")}
