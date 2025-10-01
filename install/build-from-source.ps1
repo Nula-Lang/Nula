@@ -1,6 +1,7 @@
 # PowerShell script to install Nula on Windows
+$ErrorActionPreference = "Stop"
 
-# ANSI color codes for PowerShell (approximated)
+# ANSI color codes (approximated for PowerShell)
 $RED = "`e[31m"
 $GREEN = "`e[32m"
 $YELLOW = "`e[33m"
@@ -8,40 +9,52 @@ $BLUE = "`e[34m"
 $CYAN = "`e[36m"
 $NC = "`e[0m"
 
-# Function to display a spinner
-function Show-Spinner {
+# Spinner function for visual feedback
+function Start-Spinner {
     param (
         [scriptblock]$Command,
         [string]$Message
     )
-    $spinstr = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
+    $spinstr = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     $job = Start-Job -ScriptBlock $Command
-    while ($job.State -eq 'Running') {
-        foreach ($char in $spinstr) {
-            Write-Host -NoNewline "`r${CYAN}${char}${NC} $Message"
-            Start-Sleep -Milliseconds 100
+    $delay = 0.1
+    while ($job.State -eq "Running") {
+        foreach ($i in 0..9) {
+            Write-Host -NoNewline "`r${CYAN}$($spinstr[$i])${NC} $Message"
+            Start-Sleep -Seconds $delay
         }
     }
-    $result = Receive-Job -Job $job
     Write-Host "`r${GREEN}✓${NC} $Message"
-    return $result
+    Receive-Job -Job $job -Wait
+    if ($job.State -eq "Failed") {
+        Write-Host "${RED}[ERROR] Command failed: $Message${NC}"
+        exit 1
+    }
+    Remove-Job -Job $job
 }
 
-Write-Host "${BLUE}[INFO] Checking system...${NC}"
+Write-Host "${BLUE}[INFO] Checking operating system...${NC}"
 
-# Ensure running with elevated privileges
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "${RED}[ERROR] This script requires administrative privileges. Please run as Administrator.${NC}"
-    exit 1
+# Detect operating system
+$DISTRO = "windows"
+if ($env:OS -like "*Windows*") {
+    $DISTRO = "windows"
 }
+Write-Host "${GREEN}[INFO] Operating system detected: $DISTRO${NC}"
+
+# Determine if this is an atomic/immutable distribution (not typically applicable on Windows)
+$is_atomic = $false
+# For demonstration, allow manual override or specific cases
+# No atomic distributions on Windows by default, but keeping logic for consistency
+Write-Host "${YELLOW}[INFO] Windows is not an atomic distribution. Binaries will be placed in standard paths unless overridden.${NC}"
 
 # Function to install dependencies
 function Install-Dependency {
     param (
-        [string]$Dep
+        [string]$dep
     )
-    $pkg = $Dep
-    switch ($Dep) {
+    $pkg = $dep
+    switch ($dep) {
         "go" { $pkg = "golang" }
         "zig" { $pkg = "zig" }
         "gcc" { $pkg = "mingw" } # Use MinGW for gcc on Windows
@@ -49,19 +62,23 @@ function Install-Dependency {
         "curl" { $pkg = "curl" }
     }
 
-    if (-not (Get-Command $Dep -ErrorAction SilentlyContinue)) {
-        Write-Host "${YELLOW}[INFO] $Dep not found, installing...${NC}"
-        if ($Dep -eq "gcc") {
-            # Install MinGW via winget
-            Show-Spinner -Command { winget install --id msys2.msys2 --source winget --silent } -Message "Installing MinGW (gcc)..."
-            # Add MinGW to PATH
-            $env:Path += ";C:\msys64\mingw64\bin"
-            [Environment]::SetEnvironmentVariable("Path", $env:Path, [System.EnvironmentVariableTarget]::Machine)
-        } else {
-            Show-Spinner -Command { winget install --id $pkg --source winget --silent } -Message "Installing $Dep..."
-        }
-    } else {
-        Write-Host "${GREEN}[INFO] $Dep is already installed.${NC}"
+    if (Get-Command $dep -ErrorAction SilentlyContinue) {
+        Write-Host "${GREEN}[INFO] $dep is already installed.${NC}"
+        return
+    }
+
+    Write-Host "${YELLOW}[INFO] $dep not found, installing...${NC}"
+    if (Get-Command "choco" -ErrorAction SilentlyContinue) {
+        # Use Chocolatey if available
+        Start-Spinner -Command { choco install $pkg -y } -Message "Installing $dep via Chocolatey..."
+    }
+    elseif (Get-Command "winget" -ErrorAction SilentlyContinue) {
+        # Use winget if available
+        Start-Spinner -Command { winget install --id $pkg --silent } -Message "Installing $dep via winget..."
+    }
+    else {
+        Write-Host "${RED}[ERROR] No package manager (Chocolatey or winget) found. Please install $pkg manually.${NC}"
+        exit 1
     }
 }
 
@@ -71,50 +88,78 @@ $deps = @("git", "curl", "go", "zig", "gcc")
 # Check and install dependencies
 Write-Host "${BLUE}[INFO] Checking and installing dependencies...${NC}"
 foreach ($dep in $deps) {
-    Install-Dependency -Dep $dep
+    Install-Dependency -dep $dep
 }
 
 # Check Rust
-if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
+if (-not (Get-Command "rustc" -ErrorAction SilentlyContinue)) {
     Write-Host "${YELLOW}[INFO] Rust not found, installing via rustup...${NC}"
-    Show-Spinner -Command { Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "$env:TEMP\rustup-init.exe"; & "$env:TEMP\rustup-init.exe" -y --default-toolchain stable } -Message "Installing Rust..."
-    $env:Path += ";$env:USERPROFILE\.cargo\bin"
-    [Environment]::SetEnvironmentVariable("Path", $env:Path, [System.EnvironmentVariableTarget]::Machine)
-} else {
+    Start-Spinner -Command {
+        Invoke-WebRequest -Uri "https://sh.rustup.rs" -OutFile "$env:TEMP\rustup-init.sh"
+        & "$env:TEMP\rustup-init.sh" -y --default-toolchain stable
+        Remove-Item "$env:TEMP\rustup-init.sh"
+    } -Message "Installing Rust..."
+    # Update environment to include Cargo
+    $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+}
+else {
     Write-Host "${GREEN}[INFO] Rust is already installed.${NC}"
 }
 
 # Clone repository
 Write-Host "${BLUE}[RUN] Cloning the repository...${NC}"
-Show-Spinner -Command { git clone https://github.com/Nula-Lang/Nula.git $env:TEMP\Nula } -Message "Cloning Nula repository..."
-Set-Location $env:TEMP\Nula
+Start-Spinner -Command { git clone https://github.com/Nula-Lang/Nula.git $env:TEMP\Nula } -Message "Cloning Nula repository..."
+Set-Location "$env:TEMP\Nula"
+
+# Create user-local directories
+$null = New-Item -Path "$env:USERPROFILE\.nula\lib" -ItemType Directory -Force
 
 # Build Nula (Go)
 Write-Host "${BLUE}[RUN] Building nula (Go)...${NC}"
-Set-Location nula\go
-if (-not (Test-Path go.mod)) {
-    Show-Spinner -Command { go mod init example.com/m/v2 } -Message "Initializing Go module..."
+Set-Location "$env:TEMP\Nula\nula\go"
+if (-not (Test-Path "go.mod")) {
+    Start-Spinner -Command { go mod init example.com/m/v2 } -Message "Initializing Go module..."
 }
-Show-Spinner -Command { go mod tidy } -Message "Tidying Go modules..."
-Show-Spinner -Command { go build -o nula-go.exe } -Message "Building nula (Go)..."
-Move-Item -Force nula-go.exe C:\Windows\System32\
+Start-Spinner -Command { go mod tidy } -Message "Tidying Go modules..."
+Start-Spinner -Command { go build } -Message "Building nula (Go)..."
+Rename-Item -Path "m.exe" -NewName "nula-go.exe"
+$null = chmod +x "nula-go.exe" # chmod not needed on Windows, included for consistency
+Move-Item -Path "nula-go.exe" -Destination "$env:USERPROFILE\.nula\lib\"
 
 # Build Nula (Zig)
+Set-Location "$env:TEMP\Nula\nula\zig"
 Write-Host "${BLUE}[RUN] Building nula (Zig)...${NC}"
-Set-Location ..\zig
-Show-Spinner -Command { zig build-exe main.zig -O ReleaseFast } -Message "Building nula (Zig)..."
-Rename-Item main.exe nula-zig.exe
-Move-Item -Force nula-zig.exe C:\Windows\System32\
+Start-Spinner -Command { zig build-exe main.zig -O ReleaseFast } -Message "Building nula (Zig)..."
+Rename-Item -Path "main.exe" -NewName "nula-zig.exe"
+$null = chmod +x "nula-zig.exe" # chmod not needed on Windows
+Move-Item -Path "nula-zig.exe" -Destination "$env:USERPROFILE\.nula\lib\"
 
 # Build Nula (Rust)
+Set-Location "$env:TEMP\Nula\nula"
 Write-Host "${BLUE}[RUN] Building nula (Rust)...${NC}"
-Set-Location ..
-Show-Spinner -Command { cargo build --release } -Message "Building nula (Rust)..."
-Move-Item -Force target\release\nula.exe C:\Windows\System32\
+Start-Spinner -Command { cargo build --release } -Message "Building nula (Rust)..."
+Set-Location "target\release"
+$null = chmod +x "nula.exe" # chmod not needed on Windows
 
-# Clean up
-Set-Location $env:TEMP
-Remove-Item -Recurse -Force Nula
+# Install the Rust binary based on distribution type
+if ($is_atomic) {
+    $null = New-Item -Path "$env:USERPROFILE\.local\bin" -ItemType Directory -Force
+    Move-Item -Path "nula.exe" -Destination "$env:USERPROFILE\.local\bin\"
+    Write-Host "${GREEN}[INFO] Installed nula binary to $env:USERPROFILE\.local\bin\ for atomic distribution.${NC}"
+    Write-Host "${CYAN}[PLEASE] Ensure $env:USERPROFILE\.local\bin\ is in your PATH. Run 'nula' from there.${NC}"
+}
+else {
+    # On Windows, use a system-wide directory like Program Files or AppData
+    $installPath = "$env:ProgramFiles\Nula"
+    $null = New-Item -Path $installPath -ItemType Directory -Force
+    Move-Item -Path "nula.exe" -Destination "$installPath\"
+    # Add to PATH if not already present
+    if (-not ($env:PATH -like "*$installPath*")) {
+        $env:PATH += ";$installPath"
+        [Environment]::SetEnvironmentVariable("Path", $env:PATH, [System.EnvironmentVariableTarget]::User)
+    }
+    Write-Host "${GREEN}[INFO] Installed nula binary to $installPath\.${NC}"
+}
 
 Write-Host "${GREEN}[INFO] The operation has been completed successfully!${NC}"
-Write-Host "${CYAN}[PLEASE] Run the nula, nula-go, or nula-zig command from the command prompt.${NC}"
+Write-Host "${CYAN}[PLEASE] Run the nula command or launch the application from the nula program menu.${NC}"
