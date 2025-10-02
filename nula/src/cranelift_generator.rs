@@ -1,470 +1,496 @@
-use inkwell::AddressSpace;
-use inkwell::builder::Builder;
-use inkwell::context::Context;
-use inkwell::module::Module;
-use inkwell::passes::PassManager;
-use inkwell::targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple};
-use inkwell::types::BasicMetadataTypeEnum;
-use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue};
-use inkwell::FloatPredicate;
-use inkwell::OptimizationLevel;
 use crate::ast::AstNode;
+use cranelift::prelude::*;
+use cranelift_codegen::isa::{self, CallConv};
+use cranelift_codegen::settings::{self, Configurable};
+use cranelift_codegen::Context as CodegenContext;
+use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
+use cranelift_module::{DataContext, Linkage, Module};
+use cranelift_object::{ObjectBuilder, ObjectModule};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
+use target_lexicon::Triple;
+use cranelift_codegen::ir::{types, AbiParam, Value, StackSlot, StackSlotData, StackSlotKind, condcodes::FloatCC, Function, UserFuncName, InstBuilder, GlobalValue};
+use cranelift_module::{FuncId, DataId};
 
-// Note: If you encounter linking errors (e.g., undefined references to LLVMAdd*Pass),
-// this is likely due to the LLVM library not being linked properly.
-// To fix this, create a 'build.rs' file in the root of your Cargo project with the following content:
-// fn main() {
-//     println!("cargo:rustc-link-lib=LLVM-20");
-// }
-// Additionally, ensure your Cargo.toml specifies the correct feature for LLVM 20:
-// inkwell = { version = "0.6.0", features = ["llvm20-0"] }
-// If llvm-config is named llvm-config-20, set the environment variable:
-// export LLVM_CONFIG_PATH=/usr/bin/llvm-config-20
-// before running cargo build.
-// Make sure the inkwell version supports LLVM 20 (check the latest version on crates.io or use git dependency if necessary).
+#[derive(Debug)]
+enum CraneliftValue {
+    Float(Value),
+    Pointer(Value),
+}
 
-pub fn generate_llvm(ast: &AstNode, project_name: &str, release: bool, target: Option<&str>) -> Result<(), String> {
-    let context = Context::create();
-    let module = context.create_module(project_name);
-    let builder = context.create_builder();
-
-    Target::initialize_all(&InitializationConfig::default());
-
-    let triple = target.map_or_else(|| TargetTriple::create("x86_64-pc-linux-gnu"), TargetTriple::create);
-    let target = Target::from_triple(&triple).map_err(|e| format!("Failed to create target: {}", e))?;
-    let target_machine = target
-    .create_target_machine(
-        &triple,
-        "generic",
-        "",
-        if release { OptimizationLevel::Aggressive } else { OptimizationLevel::None },
-            RelocMode::PIC,
-            CodeModel::Default,
-    )
-    .ok_or_else(|| "Failed to create target machine".to_string())?;
-
-    module.set_triple(&triple);
-    module.set_data_layout(&target_machine.get_target_data().get_data_layout());
-
-    let void_type = context.void_type();
-    let main_fn_type = void_type.fn_type(&[], false);
-    let main_fn = module.add_function("main", main_fn_type, None);
-    let entry = context.append_basic_block(main_fn, "entry");
-    builder.position_at_end(entry);
-
-    let mut env = HashMap::new();
-    build_llvm_node(ast, &builder, &context, &module, main_fn, &mut env)?;
-
-    if builder.get_insert_block().is_none() {
-        builder.position_at_end(entry);
-    }
-    builder.build_return(None);
-
-    if let Err(e) = module.verify() {
-        return Err(format!("Module verification failed: {}", e));
+impl CraneliftValue {
+    fn expect_float(self) -> Value {
+        if let CraneliftValue::Float(v) = self {
+            v
+        } else {
+            panic!("Expected float value");
+        }
     }
 
-    let fpm = PassManager::create(&module);
-    if release {
-        // Commented out due to linking issues with LLVM-20; fix linking as per note above
-        // fpm.add_function_inlining_pass();
-        // fpm.add_global_dce_pass();
-        // fpm.add_instruction_combining_pass();
-        // fpm.add_reassociate_pass();
-        // fpm.add_gvn_pass();
-        // fpm.add_cfg_simplification_pass();
-        // fpm.add_dead_store_elimination_pass();
-        // fpm.add_aggressive_dce_pass();
-        // fpm.add_loop_deletion_pass();
-        // fpm.add_loop_rotate_pass();
-        // fpm.add_ind_var_simplify_pass();
-        // Removed add_loop_unroll_and_jam_pass due to potential LLVM version incompatibility
+    fn expect_pointer(self) -> Value {
+        if let CraneliftValue::Pointer(v) = self {
+            v
+        } else {
+            panic!("Expected pointer value");
+        }
     }
-    fpm.run_on(&main_fn);
+
+    fn as_value(self) -> Value {
+        match self {
+            CraneliftValue::Float(v) => v,
+            CraneliftValue::Pointer(v) => v,
+        }
+    }
+}
+
+pub fn generate_cranelift(ast: &AstNode, project_name: &str, release: bool, target: &str) -> Result<(), String> {
+    let mut flag_builder = settings::builder();
+    flag_builder.set("opt_level", if release { "speed" } else { "none" }).map_err(|e| format!("{}", e))?;
+
+    let triple = Triple::parse(target).map_err(|e| format!("Invalid target: {}", e))?;
+    let isa_builder = isa::lookup(triple.clone()).map_err(|e| format!("{}", e))?;
+    let isa = isa_builder.finish(settings::Flags::new(flag_builder)).map_err(|e| format!("{}", e))?;
+
+    let builder = ObjectBuilder::new(isa, project_name.as_bytes().to_vec(), cranelift_module::default_libcall_names()).map_err(|e| format!("{}", e))?;
+    let mut module = ObjectModule::new(builder);
+
+    let pointer_type = module.isa().pointer_type();
+
+    // Declare printf
+    let mut printf_sig = module.make_signature();
+    printf_sig.params.push(AbiParam::new(pointer_type));
+    printf_sig.params.push(AbiParam::new(types::F64));
+    printf_sig.returns.push(AbiParam::new(types::I32));
+    printf_sig.call_conv = CallConv::triple_default(&triple);
+    let printf = module.declare_function("printf", Linkage::Import, &printf_sig).map_err(|e| format!("{}", e))?;
+
+    // Main function
+    let mut main_sig = module.make_signature();
+    main_sig.returns.push(AbiParam::new(types::I32));
+    main_sig.call_conv = CallConv::triple_default(&triple);
+    let main = module.declare_function("main", Linkage::Export, &main_sig).map_err(|e| format!("{}", e))?;
+
+    let mut func = Function::with_name_signature(UserFuncName::testcase("main"), main_sig.clone());
+    let mut func_ctx = FunctionBuilderContext::new();
+    let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
+
+    let entry = builder.create_block();
+    builder.switch_to_block(entry);
+    builder.seal_block(entry);
+
+    let mut env: HashMap<String, StackSlot> = HashMap::new();
+    let mut var_count = 0;
+    let mut data_count = 0;
+
+    build_cranelift_node(ast, &mut builder, &mut module, main, &mut env, &mut var_count, &mut data_count, printf)?;
+
+    let zero = builder.ins().iconst(types::I32, 0);
+    builder.ins().return_(&[zero]);
+
+    builder.finalize();
+
+    let mut ctx = CodegenContext::new();
+    ctx.func = func;
+    module.define_function(main, &mut ctx).map_err(|e| format!("{}", e))?;
+
+    let product = module.finish();
+    let obj = product.emit().map_err(|e| format!("{}", e))?;
 
     let obj_path = format!("{}.o", project_name);
-    target_machine
-    .write_to_file(&module, FileType::Object, Path::new(&obj_path))
-    .map_err(|e| format!("Failed to write object file: {}", e))?;
+    let mut file = File::create(&obj_path).map_err(|e| format!("Failed to create object file: {}", e))?;
+    file.write_all(&obj).map_err(|e| format!("Failed to write object file: {}", e))?;
 
-    let bin_path = project_name.to_string();
-    let mut ld_cmd = Command::new("ld");
-    ld_cmd
-    .arg("-o")
-    .arg(&bin_path)
-    .arg(&obj_path)
-    .arg("-lc")
-    .arg("-dynamic-linker")
-    .arg("/lib64/ld-linux-x86-64.so.2");
-    let output = ld_cmd.output().map_err(|e| format!("Failed to execute linker: {}", e))?;
-    if !output.status.success() {
-        return Err(format!("Linker failed: {}", String::from_utf8_lossy(&output.stderr)));
+    // Link
+    let bin_path = if target.contains("windows") { format!("{}.exe", project_name) } else { project_name.to_string() };
+    if target.contains("linux") {
+        let mut ld_cmd = Command::new("ld");
+        ld_cmd
+        .arg("-o")
+        .arg(&bin_path)
+        .arg(&obj_path)
+        .arg("-lc")
+        .arg("-dynamic-linker")
+        .arg("/lib64/ld-linux-x86-64.so.2");
+        let output = ld_cmd.output().map_err(|e| format!("Failed to execute linker: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Linker failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+    } else if target.contains("windows") {
+        let mut link_cmd = Command::new("link.exe");
+        link_cmd.arg(format!("/OUT:{}", bin_path));
+        link_cmd.arg(&obj_path);
+        // Add necessary libs for Windows, e.g., kernel32.lib, user32.lib, etc.
+        link_cmd.arg("kernel32.lib");
+        link_cmd.arg("user32.lib");
+        link_cmd.arg("gdi32.lib");
+        link_cmd.arg("msvcrt.lib");
+        // Note: User may need to have Visual Studio build tools installed
+        let output = link_cmd.output().map_err(|e| format!("Failed to execute linker: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Linker failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+    } else {
+        return Err("Unsupported target for linking".to_string());
     }
 
     Ok(())
 }
 
-fn build_llvm_node<'ctx>(
+fn create_string_constant(module: &mut ObjectModule, s: &str, data_count: &mut usize) -> Result<DataId, String> {
+    let name = format!("const_{}", *data_count);
+    *data_count += 1;
+    let mut bytes = s.as_bytes().to_vec();
+    if !bytes.ends_with(&[0]) {
+        bytes.push(0);
+    }
+    let mut data_ctx = DataContext::new();
+    data_ctx.define(bytes.into_boxed_slice());
+    let data_id = module.declare_data(&name, Linkage::Local, true, false).map_err(|e| format!("{}", e))?;
+    module.define_data(data_id, &data_ctx).map_err(|e| format!("{}", e))?;
+    Ok(data_id)
+}
+
+fn build_cranelift_node(
     node: &AstNode,
-    builder: &Builder<'ctx>,
-    context: &'ctx Context,
-    module: &Module<'ctx>,
-    current_fn: FunctionValue<'ctx>,
-    env: &mut HashMap<String, PointerValue<'ctx>>,
+    builder: &mut FunctionBuilder,
+    module: &mut ObjectModule,
+    current_fn: FuncId,
+    env: &mut HashMap<String, StackSlot>,
+    var_count: &mut usize,
+    data_count: &mut usize,
+    printf: FuncId,
 ) -> Result<(), String> {
     match node {
         AstNode::Program(nodes) => {
             for n in nodes {
-                build_llvm_node(n, builder, context, module, current_fn, env)?;
+                build_cranelift_node(n, builder, module, current_fn, env, var_count, data_count, printf)?;
             }
         }
         AstNode::Translation(_, _) | AstNode::Dependency(_) | AstNode::Import(_) | AstNode::Comment(_) => {}
         AstNode::VariableDecl(name, expr) | AstNode::Assignment(name, expr) => {
-            let val = build_llvm_expression(expr, builder, context, module, env)?.into_float_value();
-            let alloca = builder.build_alloca(context.f64_type(), name);
-            builder.build_store(alloca, val);
-            env.insert(name.clone(), alloca);
+            let val = build_cranelift_expression(expr, builder, module, env, var_count, data_count, printf)?.expect_float();
+            let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, types::F64.bytes()));
+            builder.ins().stack_store(val, stack_slot, 0);
+            env.insert(name.clone(), stack_slot);
         }
         AstNode::FunctionDef(name, params, body) => {
-            let param_types: Vec<BasicMetadataTypeEnum> = vec![context.f64_type().into(); params.len()];
-            let fn_type = context.f64_type().fn_type(&param_types, false);
-            let fn_val = module.add_function(name, fn_type, None);
-            let entry = context.append_basic_block(fn_val, "entry");
-            let prev_block = builder.get_insert_block();
-            builder.position_at_end(entry);
+            let mut sig = module.make_signature();
+            for _ in params {
+                sig.params.push(AbiParam::new(types::F64));
+            }
+            sig.returns.push(AbiParam::new(types::F64));
+            sig.call_conv = CallConv::triple_default(&module.isa().triple());
+            let fn_id = module.declare_function(name, Linkage::Local, &sig).map_err(|e| format!("{}", e))?;
+
+            let mut func = Function::with_name_signature(UserFuncName::testcase(name), sig.clone());
+            let mut fn_ctx = FunctionBuilderContext::new();
+            let mut local_builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+            let entry = local_builder.create_block();
+            local_builder.append_block_params_for_function_params(entry);
+            local_builder.switch_to_block(entry);
+            local_builder.seal_block(entry);
 
             let mut local_env = env.clone();
             for (i, param_name) in params.iter().enumerate() {
-                let param = fn_val
-                .get_nth_param(i as u32)
-                .ok_or_else(|| format!("Parameter {} not found in function {}", i, name))?;
-                let alloca = builder.build_alloca(context.f64_type(), param_name);
-                builder.build_store(alloca, param);
-                local_env.insert(param_name.clone(), alloca);
+                let param = local_builder.block_params(entry)[i];
+                let stack_slot = local_builder.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, types::F64.bytes()));
+                local_builder.ins().stack_store(param, stack_slot, 0);
+                local_env.insert(param_name.clone(), stack_slot);
             }
 
             for stmt in body {
-                build_llvm_node(stmt, builder, context, module, fn_val, &mut local_env)?;
+                build_cranelift_node(stmt, &mut local_builder, module, fn_id, &mut local_env, var_count, data_count, printf)?;
             }
 
-            if builder.get_insert_block().map_or(true, |bb| bb.get_terminator().is_none()) {
-                builder.build_return(Some(&context.f64_type().const_float(0.0)));
+            if !local_builder.is_unreachable() {
+                let zero = local_builder.ins().f64const(0.0);
+                local_builder.ins().return_(&[zero]);
             }
 
-            if let Some(prev) = prev_block {
-                builder.position_at_end(prev);
-            }
+            local_builder.finalize();
+
+            let mut ctx = CodegenContext::new();
+            ctx.func = func;
+            module.define_function(fn_id, &mut ctx).map_err(|e| format!("{}", e))?;
         }
         AstNode::ForLoop(var, iter, body) => {
-            let start = context.f64_type().const_float(0.0);
-            let end = build_llvm_expression(iter, builder, context, module, env)?.into_float_value();
-            let var_alloca = builder.build_alloca(context.f64_type(), var);
-            builder.build_store(var_alloca, start);
+            let start = builder.ins().f64const(0.0);
+            let end = build_cranelift_expression(iter, builder, module, env, var_count, data_count, printf)?.expect_float();
+            let var_slot = builder.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, types::F64.bytes()));
+            builder.ins().stack_store(start, var_slot, 0);
 
-            let loop_bb = context.append_basic_block(current_fn, "loop");
-            let body_bb = context.append_basic_block(current_fn, "body");
-            let inc_bb = context.append_basic_block(current_fn, "inc");
-            let after_bb = context.append_basic_block(current_fn, "after");
+            let loop_bb = builder.create_block();
+            let body_bb = builder.create_block();
+            let inc_bb = builder.create_block();
+            let after_bb = builder.create_block();
 
-            builder.build_unconditional_branch(loop_bb);
-            builder.position_at_end(loop_bb);
+            builder.ins().jump(loop_bb, &[]);
+            builder.switch_to_block(loop_bb);
 
-            let var_val = builder.build_load(context.f64_type(), var_alloca, var).into_float_value();
-            let cond = builder.build_float_compare(FloatPredicate::OLT, var_val, end, "cmp");
-            builder.build_conditional_branch(cond, body_bb, after_bb);
+            let var_val = builder.ins().stack_load(types::F64, var_slot, 0);
+            let cond = builder.ins().fcmp(FloatCC::OrderedLessThan, var_val, end);
+            builder.ins().brnz(cond, body_bb, &[]);
+            builder.ins().jump(after_bb, &[]);
+            builder.seal_block(loop_bb);
 
-            builder.position_at_end(body_bb);
+            builder.switch_to_block(body_bb);
             let mut loop_env = env.clone();
-            loop_env.insert(var.clone(), var_alloca);
+            loop_env.insert(var.clone(), var_slot);
             for stmt in body {
-                build_llvm_node(stmt, builder, context, module, current_fn, &mut loop_env)?;
+                build_cranelift_node(stmt, builder, module, current_fn, &mut loop_env, var_count, data_count, printf)?;
             }
-            builder.build_unconditional_branch(inc_bb);
+            builder.ins().jump(inc_bb, &[]);
+            builder.seal_block(body_bb);
 
-            builder.position_at_end(inc_bb);
-            let var_val = builder.build_load(context.f64_type(), var_alloca, var).into_float_value();
-            let step = context.f64_type().const_float(1.0);
-            let next = builder.build_float_add(var_val, step, "inc");
-            builder.build_store(var_alloca, next);
-            builder.build_unconditional_branch(loop_bb);
+            builder.switch_to_block(inc_bb);
+            let var_val = builder.ins().stack_load(types::F64, var_slot, 0);
+            let step = builder.ins().f64const(1.0);
+            let next = builder.ins().fadd(var_val, step);
+            builder.ins().stack_store(next, var_slot, 0);
+            builder.ins().jump(loop_bb, &[]);
+            builder.seal_block(inc_bb);
 
-            builder.position_at_end(after_bb);
+            builder.switch_to_block(after_bb);
+            builder.seal_block(after_bb);
         }
         AstNode::WhileLoop(cond, body) => {
-            let loop_bb = context.append_basic_block(current_fn, "loop");
-            let body_bb = context.append_basic_block(current_fn, "body");
-            let after_bb = context.append_basic_block(current_fn, "after");
+            let loop_bb = builder.create_block();
+            let body_bb = builder.create_block();
+            let after_bb = builder.create_block();
 
-            builder.build_unconditional_branch(loop_bb);
-            builder.position_at_end(loop_bb);
+            builder.ins().jump(loop_bb, &[]);
+            builder.switch_to_block(loop_bb);
+            let cond_val = build_cranelift_expression(cond, builder, module, env, var_count, data_count, printf)?.expect_float();
+            let zero = builder.ins().f64const(0.0);
+            let cond_bool = builder.ins().fcmp(FloatCC::OrderedNotEqual, cond_val, zero);
+            builder.ins().brnz(cond_bool, body_bb, &[]);
+            builder.ins().jump(after_bb, &[]);
+            builder.seal_block(loop_bb);
 
-            let cond_val = build_llvm_expression(cond, builder, context, module, env)?.into_float_value();
-            let cond_bool = builder.build_float_compare(FloatPredicate::ONE, cond_val, context.f64_type().const_zero(), "cmp");
-            builder.build_conditional_branch(cond_bool, body_bb, after_bb);
-
-            builder.position_at_end(body_bb);
+            builder.switch_to_block(body_bb);
             for stmt in body {
-                build_llvm_node(stmt, builder, context, module, current_fn, env)?;
+                build_cranelift_node(stmt, builder, module, current_fn, env, var_count, data_count, printf)?;
             }
-            builder.build_unconditional_branch(loop_bb);
+            builder.ins().jump(loop_bb, &[]);
+            builder.seal_block(body_bb);
 
-            builder.position_at_end(after_bb);
+            builder.switch_to_block(after_bb);
+            builder.seal_block(after_bb);
         }
         AstNode::If(cond, body, else_ifs, else_body) => {
-            let cond_val = build_llvm_expression(cond, builder, context, module, env)?.into_float_value();
-            let cond_bool = builder.build_float_compare(FloatPredicate::ONE, cond_val, context.f64_type().const_zero(), "cmp");
-            let then_bb = context.append_basic_block(current_fn, "then");
-            let mut next_bb = context.append_basic_block(current_fn, "else");
-            let cont_bb = context.append_basic_block(current_fn, "cont");
+            let cond_val = build_cranelift_expression(cond, builder, module, env, var_count, data_count, printf)?.expect_float();
+            let zero = builder.ins().f64const(0.0);
+            let cond_bool = builder.ins().fcmp(FloatCC::OrderedNotEqual, cond_val, zero);
+            let then_bb = builder.create_block();
+            let mut next_bb = builder.create_block();
+            let cont_bb = builder.create_block();
 
-            builder.build_conditional_branch(cond_bool, then_bb, next_bb);
-            builder.position_at_end(then_bb);
+            builder.ins().brnz(cond_bool, then_bb, &[]);
+            builder.ins().jump(next_bb, &[]);
+            builder.seal_current();
+
+            builder.switch_to_block(then_bb);
             for stmt in body {
-                build_llvm_node(stmt, builder, context, module, current_fn, env)?;
+                build_cranelift_node(stmt, builder, module, current_fn, env, var_count, data_count, printf)?;
             }
-            builder.build_unconditional_branch(cont_bb);
+            builder.ins().jump(cont_bb, &[]);
+            builder.seal_block(then_bb);
 
-            builder.position_at_end(next_bb);
+            builder.switch_to_block(next_bb);
             for (ei_cond, ei_body) in else_ifs {
-                let ei_cond_val = build_llvm_expression(ei_cond, builder, context, module, env)?.into_float_value();
-                let ei_cond_bool = builder.build_float_compare(FloatPredicate::ONE, ei_cond_val, context.f64_type().const_zero(), "cmp");
-                let ei_then_bb = context.append_basic_block(current_fn, "else_if_then");
-                let ei_else_bb = context.append_basic_block(current_fn, "else_if_else");
+                let ei_cond_val = build_cranelift_expression(ei_cond, builder, module, env, var_count, data_count, printf)?.expect_float();
+                let zero = builder.ins().f64const(0.0);
+                let ei_cond_bool = builder.ins().fcmp(FloatCC::OrderedNotEqual, ei_cond_val, zero);
+                let ei_then_bb = builder.create_block();
+                let ei_else_bb = builder.create_block();
 
-                builder.build_conditional_branch(ei_cond_bool, ei_then_bb, ei_else_bb);
-                builder.position_at_end(ei_then_bb);
+                builder.ins().brnz(ei_cond_bool, ei_then_bb, &[]);
+                builder.ins().jump(ei_else_bb, &[]);
+                builder.seal_current();
+
+                builder.switch_to_block(ei_then_bb);
                 for stmt in ei_body {
-                    build_llvm_node(stmt, builder, context, module, current_fn, env)?;
+                    build_cranelift_node(stmt, builder, module, current_fn, env, var_count, data_count, printf)?;
                 }
-                builder.build_unconditional_branch(cont_bb);
+                builder.ins().jump(cont_bb, &[]);
+                builder.seal_block(ei_then_bb);
 
                 next_bb = ei_else_bb;
-                builder.position_at_end(next_bb);
+                builder.switch_to_block(next_bb);
             }
             if let Some(eb) = else_body {
                 for stmt in eb {
-                    build_llvm_node(stmt, builder, context, module, current_fn, env)?;
+                    build_cranelift_node(stmt, builder, module, current_fn, env, var_count, data_count, printf)?;
                 }
             }
-            builder.build_unconditional_branch(cont_bb);
+            builder.ins().jump(cont_bb, &[]);
+            builder.seal_block(next_bb);
 
-            builder.position_at_end(cont_bb);
+            builder.switch_to_block(cont_bb);
+            builder.seal_block(cont_bb);
         }
         AstNode::Write(expr) => {
-            let printf = get_printf(module, context);
-            let val = build_llvm_expression(expr, builder, context, module, env)?;
-            let fmt_str = match &**expr {
-                AstNode::StringLit(s) => builder.build_global_string_ptr(&format!("{}\n", s), "fmt_str"),
-                AstNode::NumberLit(_) => builder.build_global_string_ptr("%f\n", "fmt_num"),
-                AstNode::BoolLit(b) => builder.build_global_string_ptr(if *b { "true\n" } else { "false\n" }, "fmt_bool"),
-                _ => builder.build_global_string_ptr("%f\n", "fmt"),
+            let val = build_cranelift_expression(expr, builder, module, env, var_count, data_count, printf)?;
+            let fmt_str = match expr {
+                AstNode::StringLit(_) => "%s\n",
+                AstNode::NumberLit(_) => "%f\n",
+                AstNode::BoolLit(b) => if *b { "true\n" } else { "false\n" },
+                _ => "%f\n",
             };
-            let args: Vec<BasicMetadataValueEnum> = vec![fmt_str.as_basic_value_enum().into(), val.into()];
-            builder.build_call(printf, &args, "printf");
+            let fmt_str_id = create_string_constant(module, fmt_str, data_count)?;
+            let gv = module.declare_data_in_func(fmt_str_id, builder.func);
+            let fmt_ptr = builder.ins().global_value(module.isa().pointer_type(), gv);
+            let args = if matches!(expr, AstNode::BoolLit(_)) {
+                let bool_str = if let AstNode::BoolLit(b) = expr {
+                    if *b { "true" } else { "false" }
+                } else {
+                    unreachable!()
+                };
+                let bool_id = create_string_constant(module, bool_str, data_count)?;
+                let bool_gv = module.declare_data_in_func(bool_id, builder.func);
+                let bool_ptr = builder.ins().global_value(module.isa().pointer_type(), bool_gv);
+                vec![fmt_ptr, bool_ptr]
+            } else if matches!(expr, AstNode::StringLit(_)) {
+                vec![fmt_ptr, val.expect_pointer()]
+            } else {
+                vec![fmt_ptr, val.expect_float()]
+            };
+            let callee = module.declare_func_in_func(printf, builder.func);
+            builder.ins().call(callee, &args);
         }
         AstNode::Return(expr) => {
             if let Some(e) = expr {
-                let val = build_llvm_expression(e, builder, context, module, env)?.into_float_value();
-                builder.build_return(Some(&val));
+                let val = build_cranelift_expression(e, builder, module, env, var_count, data_count, printf)?.expect_float();
+                builder.ins().return_(&[val]);
             } else {
-                builder.build_return(Some(&context.f64_type().const_zero()));
+                let zero = builder.ins().f64const(0.0);
+                builder.ins().return_(&[zero]);
             }
         }
-        AstNode::Add(left, right) => {
-            let lhs = build_llvm_expression(left, builder, context, module, env)?.into_float_value();
-            let rhs = build_llvm_expression(right, builder, context, module, env)?.into_float_value();
-            builder.build_float_add(lhs, rhs, "add");
-        }
-        AstNode::Mul(left, right) => {
-            let lhs = build_llvm_expression(left, builder, context, module, env)?.into_float_value();
-            let rhs = build_llvm_expression(right, builder, context, module, env)?.into_float_value();
-            builder.build_float_mul(lhs, rhs, "mul");
-        }
-        AstNode::Binary(left, op, right) => {
-            let lhs = build_llvm_expression(left, builder, context, module, env)?.into_float_value();
-            let rhs = build_llvm_expression(right, builder, context, module, env)?.into_float_value();
-            match op.as_str() {
-                "+" => builder.build_float_add(lhs, rhs, "add"),
-                "-" => builder.build_float_sub(lhs, rhs, "sub"),
-                "*" => builder.build_float_mul(lhs, rhs, "mul"),
-                "/" => builder.build_float_div(lhs, rhs, "div"),
-                "==" | "eq" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OEQ, lhs, rhs, "eq");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "eq_float")
-                }
-                "!=" | "ne" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::ONE, lhs, rhs, "ne");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "ne_float")
-                }
-                "<" | "lt" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OLT, lhs, rhs, "lt");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "lt_float")
-                }
-                ">" | "gt" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OGT, lhs, rhs, "gt");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "gt_float")
-                }
-                "<=" | "le" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OLE, lhs, rhs, "le");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "le_float")
-                }
-                ">=" | "ge" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OGE, lhs, rhs, "ge");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "ge_float")
-                }
-                "and" | "&&" => {
-                    let lhs_bool = builder.build_float_compare(FloatPredicate::ONE, lhs, context.f64_type().const_zero(), "lhs_bool");
-                    let rhs_bool = builder.build_float_compare(FloatPredicate::ONE, rhs, context.f64_type().const_zero(), "rhs_bool");
-                    let and = builder.build_and(lhs_bool, rhs_bool, "and");
-                    builder.build_unsigned_int_to_float(and, context.f64_type(), "and_float")
-                }
-                "or" | "||" => {
-                    let lhs_bool = builder.build_float_compare(FloatPredicate::ONE, lhs, context.f64_type().const_zero(), "lhs_bool");
-                    let rhs_bool = builder.build_float_compare(FloatPredicate::ONE, rhs, context.f64_type().const_zero(), "rhs_bool");
-                    let or = builder.build_or(lhs_bool, rhs_bool, "or");
-                    builder.build_unsigned_int_to_float(or, context.f64_type(), "or_float")
-                }
-                _ => return Err(format!("Unsupported binary operator: {}", op)),
-            };
-        }
-        AstNode::Unary(op, expr) => {
-            let val = build_llvm_expression(expr, builder, context, module, env)?.into_float_value();
-            match op.as_str() {
-                "-" => builder.build_float_neg(val, "neg"),
-                "not" => {
-                    let zero = context.f64_type().const_zero();
-                    let cmp = builder.build_float_compare(FloatPredicate::OEQ, val, zero, "cmp");
-                    let not = builder.build_not(cmp, "not");
-                    builder.build_unsigned_int_to_float(not, context.f64_type(), "not_float")
-                }
-                _ => return Err(format!("Unsupported unary operator: {}", op)),
-            };
-        }
-        AstNode::Call(name, args) => {
-            if let Some(fn_val) = module.get_function(name) {
-                let arg_vals: Vec<BasicMetadataValueEnum> = args
-                .iter()
-                .map(|arg| build_llvm_expression(arg, builder, context, module, env).map(|v| v.into()))
-                .collect::<Result<Vec<_>, _>>()?;
-                builder
-                .build_call(fn_val, &arg_vals, "call")
-                .try_as_basic_value()
-                .left()
-                .ok_or_else(|| format!("Function call {} returned no value", name))?
-                .into_float_value();
-            } else {
-                return Err(format!("Undefined function: {}", name));
-            }
-        }
-        _ => return Err("Unsupported AST node in build_llvm_node".to_string()),
+        _ => return Err("Unsupported AST node in build_cranelift_node".to_string()),
     }
     Ok(())
 }
 
-fn build_llvm_expression<'ctx>(
+fn build_cranelift_expression(
     expr: &AstNode,
-    builder: &Builder<'ctx>,
-    context: &'ctx Context,
-    module: &Module<'ctx>,
-    env: &HashMap<String, PointerValue<'ctx>>,
-) -> Result<BasicValueEnum<'ctx>, String> {
+    builder: &mut FunctionBuilder,
+    module: &mut ObjectModule,
+    env: &HashMap<String, StackSlot>,
+    var_count: &mut usize,
+    data_count: &mut usize,
+    printf: FuncId,
+) -> Result<CraneliftValue, String> {
     match expr {
-        AstNode::StringLit(s) => Ok(builder.build_global_string_ptr(s, "str").as_basic_value_enum()),
-        AstNode::NumberLit(num) => Ok(context.f64_type().const_float(*num).into()),
-        AstNode::BoolLit(b) => Ok(context.f64_type().const_float(if *b { 1.0 } else { 0.0 }).into()),
+        AstNode::StringLit(s) => {
+            let data_id = create_string_constant(module, s, data_count)?;
+            let gv = module.declare_data_in_func(data_id, builder.func);
+            let ptr = builder.ins().global_value(module.isa().pointer_type(), gv);
+            Ok(CraneliftValue::Pointer(ptr))
+        }
+        AstNode::NumberLit(num) => {
+            let val = builder.ins().f64const(*num);
+            Ok(CraneliftValue::Float(val))
+        }
+        AstNode::BoolLit(b) => {
+            let val = builder.ins().f64const(if *b { 1.0 } else { 0.0 });
+            Ok(CraneliftValue::Float(val))
+        }
         AstNode::Ident(name) => {
-            if let Some(&ptr) = env.get(name) {
-                Ok(builder.build_load(context.f64_type(), ptr, name))
+            if let Some(&slot) = env.get(name) {
+                let val = builder.ins().stack_load(types::F64, slot, 0);
+                Ok(CraneliftValue::Float(val))
             } else {
                 Err(format!("Undefined variable: {}", name))
             }
         }
         AstNode::Call(name, args) => {
-            if let Some(fn_val) = module.get_function(name) {
-                let arg_vals: Vec<BasicMetadataValueEnum> = args
-                .iter()
-                .map(|arg| build_llvm_expression(arg, builder, context, module, env).map(|v| v.into()))
-                .collect::<Result<Vec<_>, _>>()?;
-                Ok(builder
-                .build_call(fn_val, &arg_vals, "call")
-                .try_as_basic_value()
-                .left()
-                .ok_or_else(|| format!("Function call {} returned no value", name))?)
-            } else {
-                Err(format!("Undefined function: {}", name))
-            }
+            let func_id = module.get_name(name).ok_or(format!("Undefined function: {}", name))?.func_id().ok_or("Not a function")?;
+            let callee = module.declare_func_in_func(func_id, builder.func);
+            let arg_vals: Vec<Value> = args
+            .iter()
+            .map(|arg| build_cranelift_expression(arg, builder, module, env, var_count, data_count, printf).map(|v| v.expect_float()))
+            .collect::<Result<_, _>>()?;
+            let call = builder.ins().call(callee, &arg_vals);
+            let res = builder.inst_results(call)[0];
+            Ok(CraneliftValue::Float(res))
         }
         AstNode::Binary(left, op, right) => {
-            let lhs = build_llvm_expression(left, builder, context, module, env)?.into_float_value();
-            let rhs = build_llvm_expression(right, builder, context, module, env)?.into_float_value();
+            let lhs = build_cranelift_expression(left, builder, module, env, var_count, data_count, printf)?.expect_float();
+            let rhs = build_cranelift_expression(right, builder, module, env, var_count, data_count, printf)?.expect_float();
             let res = match op.as_str() {
-                "+" => builder.build_float_add(lhs, rhs, "add").into(),
-                "-" => builder.build_float_sub(lhs, rhs, "sub").into(),
-                "*" => builder.build_float_mul(lhs, rhs, "mul").into(),
-                "/" => builder.build_float_div(lhs, rhs, "div").into(),
+                "+" => builder.ins().fadd(lhs, rhs),
+                "-" => builder.ins().fsub(lhs, rhs),
+                "*" => builder.ins().fmul(lhs, rhs),
+                "/" => builder.ins().fdiv(lhs, rhs),
                 "==" | "eq" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OEQ, lhs, rhs, "eq");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "eq_float").into()
+                    let cmp = builder.ins().fcmp(FloatCC::OrderedEqual, lhs, rhs);
+                    let ext = builder.ins().uextend(types::I64, cmp);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 "!=" | "ne" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::ONE, lhs, rhs, "ne");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "ne_float").into()
+                    let cmp = builder.ins().fcmp(FloatCC::OrderedNotEqual, lhs, rhs);
+                    let ext = builder.ins().uextend(types::I64, cmp);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 "<" | "lt" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OLT, lhs, rhs, "lt");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "lt_float").into()
+                    let cmp = builder.ins().fcmp(FloatCC::OrderedLessThan, lhs, rhs);
+                    let ext = builder.ins().uextend(types::I64, cmp);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 ">" | "gt" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OGT, lhs, rhs, "gt");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "gt_float").into()
+                    let cmp = builder.ins().fcmp(FloatCC::OrderedGreaterThan, lhs, rhs);
+                    let ext = builder.ins().uextend(types::I64, cmp);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 "<=" | "le" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OLE, lhs, rhs, "le");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "le_float").into()
+                    let cmp = builder.ins().fcmp(FloatCC::OrderedLessThanOrEqual, lhs, rhs);
+                    let ext = builder.ins().uextend(types::I64, cmp);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 ">=" | "ge" => {
-                    let cmp = builder.build_float_compare(FloatPredicate::OGE, lhs, rhs, "ge");
-                    builder.build_unsigned_int_to_float(cmp, context.f64_type(), "ge_float").into()
+                    let cmp = builder.ins().fcmp(FloatCC::OrderedGreaterThanOrEqual, lhs, rhs);
+                    let ext = builder.ins().uextend(types::I64, cmp);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 "and" | "&&" => {
-                    let lhs_bool = builder.build_float_compare(FloatPredicate::ONE, lhs, context.f64_type().const_zero(), "lhs_bool");
-                    let rhs_bool = builder.build_float_compare(FloatPredicate::ONE, rhs, context.f64_type().const_zero(), "rhs_bool");
-                    let and = builder.build_and(lhs_bool, rhs_bool, "and");
-                    builder.build_unsigned_int_to_float(and, context.f64_type(), "and_float").into()
+                    let zero = builder.ins().f64const(0.0);
+                    let lhs_bool = builder.ins().fcmp(FloatCC::OrderedNotEqual, lhs, zero);
+                    let rhs_bool = builder.ins().fcmp(FloatCC::OrderedNotEqual, rhs, zero);
+                    let and = builder.ins().band(lhs_bool, rhs_bool);
+                    let ext = builder.ins().uextend(types::I64, and);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 "or" | "||" => {
-                    let lhs_bool = builder.build_float_compare(FloatPredicate::ONE, lhs, context.f64_type().const_zero(), "lhs_bool");
-                    let rhs_bool = builder.build_float_compare(FloatPredicate::ONE, rhs, context.f64_type().const_zero(), "rhs_bool");
-                    let or = builder.build_or(lhs_bool, rhs_bool, "or");
-                    builder.build_unsigned_int_to_float(or, context.f64_type(), "or_float").into()
+                    let zero = builder.ins().f64const(0.0);
+                    let lhs_bool = builder.ins().fcmp(FloatCC::OrderedNotEqual, lhs, zero);
+                    let rhs_bool = builder.ins().fcmp(FloatCC::OrderedNotEqual, rhs, zero);
+                    let or = builder.ins().bor(lhs_bool, rhs_bool);
+                    let ext = builder.ins().uextend(types::I64, or);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 _ => return Err(format!("Unsupported binary operator: {}", op)),
             };
-            Ok(res)
+            Ok(CraneliftValue::Float(res))
         }
         AstNode::Unary(op, expr) => {
-            let val = build_llvm_expression(expr, builder, context, module, env)?.into_float_value();
+            let val = build_cranelift_expression(expr, builder, module, env, var_count, data_count, printf)?.expect_float();
             let res = match op.as_str() {
-                "-" => builder.build_float_neg(val, "neg").into(),
+                "-" => builder.ins().fneg(val),
                 "not" => {
-                    let zero = context.f64_type().const_zero();
-                    let cmp = builder.build_float_compare(FloatPredicate::OEQ, val, zero, "cmp");
-                    let not = builder.build_not(cmp, "not");
-                    builder.build_unsigned_int_to_float(not, context.f64_type(), "not_float").into()
+                    let zero = builder.ins().f64const(0.0);
+                    let cmp = builder.ins().fcmp(FloatCC::OrderedEqual, val, zero);
+                    let not = builder.ins().bnot(cmp);
+                    let ext = builder.ins().uextend(types::I64, not);
+                    builder.ins().uitof(types::F64, ext)
                 }
                 _ => return Err(format!("Unsupported unary operator: {}", op)),
             };
-            Ok(res)
+            Ok(CraneliftValue::Float(res))
         }
-        _ => Err("Unsupported expression in build_llvm_expression".to_string()),
+        _ => Err("Unsupported expression in build_cranelift_expression".to_string()),
     }
-}
-
-fn get_printf<'ctx>(module: &Module<'ctx>, context: &'ctx Context) -> FunctionValue<'ctx> {
-    let i8p_type = context.i8_type().ptr_type(AddressSpace::default());
-    let printf_type = context.i32_type().fn_type(&[i8p_type.into()], true);
-    module.get_function("printf").unwrap_or_else(|| module.add_function("printf", printf_type, None))
 }
