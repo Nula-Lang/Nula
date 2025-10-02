@@ -10,7 +10,9 @@ use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 use target_lexicon::Triple;
-use cranelift_codegen::ir::{types, AbiParam, Value, StackSlot, StackSlotData, StackSlotKind, condcodes::FloatCC, Function, UserFuncName, InstBuilder};
+use cranelift_codegen::ir::{
+    types, AbiParam, Value, StackSlot, StackSlotData, StackSlotKind, condcodes::FloatCC, Function, UserFuncName, InstBuilder,
+};
 use cranelift_module::{FuncId, DataId, FuncOrDataId};
 use std::str::FromStr;
 
@@ -53,7 +55,8 @@ pub fn generate_cranelift(ast: &AstNode, project_name: &str, release: bool, targ
     let isa_builder = isa::lookup(triple.clone()).map_err(|e| format!("{}", e))?;
     let isa = isa_builder.finish(settings::Flags::new(flag_builder)).map_err(|e| format!("{}", e))?;
 
-    let builder = ObjectBuilder::new(isa, project_name.as_bytes().to_vec(), cranelift_module::default_libcall_names()).map_err(|e| format!("{}", e))?;
+    let builder = ObjectBuilder::new(isa, project_name.as_bytes().to_vec(), cranelift_module::default_libcall_names())
+    .map_err(|e| format!("{}", e))?;
     let mut module = ObjectModule::new(builder);
 
     let pointer_type = module.isa().pointer_type();
@@ -64,13 +67,17 @@ pub fn generate_cranelift(ast: &AstNode, project_name: &str, release: bool, targ
     printf_sig.params.push(AbiParam::new(types::F64));
     printf_sig.returns.push(AbiParam::new(types::I32));
     printf_sig.call_conv = CallConv::triple_default(&triple);
-    let printf = module.declare_function("printf", Linkage::Import, &printf_sig).map_err(|e| format!("{}", e))?;
+    let printf = module
+    .declare_function("printf", Linkage::Import, &printf_sig)
+    .map_err(|e| format!("{}", e))?;
 
     // Main function
     let mut main_sig = module.make_signature();
     main_sig.returns.push(AbiParam::new(types::I32));
     main_sig.call_conv = CallConv::triple_default(&triple);
-    let main = module.declare_function("main", Linkage::Export, &main_sig).map_err(|e| format!("{}", e))?;
+    let main = module
+    .declare_function("main", Linkage::Export, &main_sig)
+    .map_err(|e| format!("{}", e))?;
 
     let mut func = Function::with_name_signature(UserFuncName::testcase("main"), main_sig.clone());
     let mut func_ctx = FunctionBuilderContext::new();
@@ -102,7 +109,11 @@ pub fn generate_cranelift(ast: &AstNode, project_name: &str, release: bool, targ
     file.write_all(&obj).map_err(|e| format!("Failed to write object file: {}", e))?;
 
     // Link
-    let bin_path = if target.contains("windows") { format!("{}.exe", project_name) } else { project_name.to_string() };
+    let bin_path = if target.contains("windows") {
+        format!("{}.exe", project_name)
+    } else {
+        project_name.to_string()
+    };
     if target.contains("linux") {
         let mut ld_cmd = Command::new("ld");
         ld_cmd
@@ -144,7 +155,9 @@ fn create_string_constant(module: &mut ObjectModule, s: &str, data_count: &mut u
     }
     let mut data_ctx = DataContext::new();
     data_ctx.define(bytes.into_boxed_slice());
-    let data_id = module.declare_data(&name, Linkage::Local, true, false).map_err(|e| format!("{}", e))?;
+    let data_id = module
+    .declare_data(&name, Linkage::Local, true, false)
+    .map_err(|e| format!("{}", e))?;
     module.define_data(data_id, &data_ctx).map_err(|e| format!("{}", e))?;
     Ok(data_id)
 }
@@ -179,7 +192,9 @@ fn build_cranelift_node(
             }
             sig.returns.push(AbiParam::new(types::F64));
             sig.call_conv = CallConv::triple_default(&module.isa().triple());
-            let fn_id = module.declare_function(name, Linkage::Local, &sig).map_err(|e| format!("{}", e))?;
+            let fn_id = module
+            .declare_function(name, Linkage::Local, &sig)
+            .map_err(|e| format!("{}", e))?;
 
             let mut func = Function::with_name_signature(UserFuncName::testcase(name), sig.clone());
             let mut fn_ctx = FunctionBuilderContext::new();
@@ -330,7 +345,7 @@ fn build_cranelift_node(
         }
         AstNode::Write(expr) => {
             let val = build_cranelift_expression(expr, builder, module, env, var_count, data_count, printf)?;
-            let fmt_str = match expr {
+            let fmt_str = match &**expr {
                 AstNode::StringLit(_) => "%s\n",
                 AstNode::NumberLit(_) => "%f\n",
                 AstNode::BoolLit(_) => "%s\n",
@@ -339,8 +354,8 @@ fn build_cranelift_node(
             let fmt_str_id = create_string_constant(module, fmt_str, data_count)?;
             let gv = module.declare_data_in_func(fmt_str_id, builder.func);
             let fmt_ptr = builder.ins().global_value(module.isa().pointer_type(), gv);
-            let args = if matches!(expr, AstNode::StringLit(_) | AstNode::BoolLit(_)) {
-                let str_val = match expr {
+            let args = if matches!(&**expr, AstNode::StringLit(_) | AstNode::BoolLit(_)) {
+                let str_val = match &**expr {
                     AstNode::StringLit(ref s) => s.as_str(),
                     AstNode::BoolLit(b) => if *b { "true" } else { "false" },
                     _ => unreachable!(),
