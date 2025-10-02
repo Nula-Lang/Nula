@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod config;
 mod generator;
-mod llvm_generator;
+mod cranelift_generator;
 mod interpreter;
 mod optimizer;
 mod parser;
@@ -40,6 +40,8 @@ fn main() {
         "init" => commands::init_project(),
         "install" => commands::install_dependency(&args),
         "remove" => commands::remove_dependency(&args),
+        "update" => commands::update_dependencies(),
+        "update-nula" => commands::update_nula(),
         "resolve" => commands::resolve_dependencies(),
         _ => cli::print_error(&format!("Unknown command: {}", command)),
     }
