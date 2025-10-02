@@ -45,7 +45,7 @@ curl -L -o "$env:TEMP\install.ps1" https://raw.githubusercontent.com/Nula-Lang/N
 .Run the Script as Administrator
 [source,powershell]
 ----
-Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\install.ps1`""
+Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `\"$env:TEMP\install.ps1`\""
 ----
 
 ==== Linux, Unix, and macOS
@@ -79,7 +79,7 @@ curl -L -o "$env:TEMP\build-from-source.ps1" https://raw.githubusercontent.com/N
 .Run the Build Script as Administrator
 [source,powershell]
 ----
-Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$env:TEMP\build-from-source.ps1`""
+Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `\"$env:TEMP\build-from-source.ps1`\""
 ----
 
 ==== Linux, Unix, and macOS
@@ -142,13 +142,13 @@ write "This is visible"
 
 ==== Variables and Data Types
 
-While specific details on variables are not extensively documented, Nula likely supports basic types similar to Python, given its translation features. Example (inferred):
+Nula supports basic data types similar to Python, with a straightforward declaration syntax.
 
 [source,nula]
 ----
 let x = 10
 let message = "Hello"
-write message + " " + x
+write message + " " + x  @ Outputs: Hello 10
 ----
 
 === Code Translation
@@ -161,7 +161,7 @@ One of Nula's unique features is the ability to translate code from other langua
 # = python = {print("Hello from Python!")}
 ----
 
-This would be translated to Nula's equivalent: `write "Hello from Python!"`
+This translates to Nula's equivalent: `write "Hello from Python!"`
 
 === Managing Dependencies
 
@@ -198,6 +198,30 @@ Nula provides a powerful command-line interface for managing projects and execut
 
 |`install {dep}`
 |Installs a specified dependency.
+
+|`update-nula`
+|Updates Nula binaries to the latest version.
+
+|`remove {dep}`
+|Removes an installed dependency.
+
+|`update`
+|Updates all installed dependencies.
+
+|`check`
+|Validates .nula code for syntax errors.
+
+|`init`
+|Initializes a new Nula project.
+
+|`fmt`
+|Formats Nula code for consistency.
+
+|`resolve`
+|Resolves dependency conflicts.
+
+|`test`
+|Runs tests for Nula projects.
 |===
 
 .Example Usage
@@ -210,16 +234,16 @@ nula run hello.nula
 
 === Performance Optimization
 
-By compiling with Zig, Nula achieves performance close to native C code. Use the `build` command for production deployments.
+By compiling with Zig, Nula achieves performance close to native C code. Use the `build` command for production deployments to optimize execution speed.
 
 === Interpreted vs. Compiled Mode
 
-- **Interpreted (Python)**: Ideal for development and quick iterations.
-- **Compiled (Zig)**: For performance-critical applications.
+- **Interpreted (Python)**: Ideal for rapid development and testing, allowing quick iterations without compilation.
+- **Compiled (Zig)**: Suited for performance-critical applications where speed is paramount.
 
 === Translating from Other Languages
 
-Nula supports translation from languages like Python. This feature allows seamless migration of existing codebases.
+Nula supports translation from languages like Python, enabling developers to migrate existing codebases seamlessly.
 
 == Examples
 
@@ -249,34 +273,52 @@ print(add(5, 3))
 }
 ----
 
-This translates the Python function and prints 8.
+This translates the Python function and outputs: 8
+
+=== Working with Dependencies
+
+.File: math_example.nula
+[source,nula]
+----
+<(math)>
+let result = math.sqrt(25)
+write "Square root of 25 is " + result  @ Outputs: Square root of 25 is 5
+----
 
 == Contributing to Nula
 
-Nula is an open-source project hosted on GitHub at https://github.com/Nula-Lang/Nula/. Contributions are welcome! Check the repository for source code, issues, and pull requests.
+Nula is an open-source project hosted on GitHub at https://github.com/Nula-Lang/Nula/. Contributions are welcome! To contribute:
+
+1. Fork the repository.
+2. Create a new branch for your feature or bug fix.
+3. Make your changes and test thoroughly.
+4. Submit a pull request with a clear description of your changes.
+
+Check the repository for source code, issues, and pull request guidelines.
 
 [TIP]
 ====
-To contribute, fork the repository, make your changes, and submit a pull request.
+Before contributing, review the contribution guidelines in the repository's `CONTRIBUTING.md` file.
 ====
 
 == Frequently Asked Questions
 
 === What makes Nula different from Rust or Zig?
 
-Nula combines the ease of rst with the speed of Zig, offering both interpreted and compiled modes in a simple syntax.
+Nula combines the simplicity of Python-like syntax with the performance of Zig, offering both interpreted and compiled modes for flexibility.
 
 === Is Nula production-ready?
 
-As a new language (created in 2025), it's in early stages. Use for experimentation and provide feedback.
+As a new language (created in 2025), Nula is in its early stages. It is suitable for experimentation and prototyping, and we encourage community feedback to improve its readiness.
 
 === Where can I find more examples?
 
-Explore the GitHub repository for any example files or contribute your own.
+Visit the GitHub repository at https://github.com/Nula-Lang/Nula/ for additional examples, or contribute your own to the community.
 
 == References
 
 - Official Repository: https://github.com/Nula-Lang/Nula/
-- Rust Documentation: https://doc.rust-lang.org/stable/
 - Zig Documentation: https://ziglang.org/
+- Python Documentation: https://www.python.org/
+- Rust Documentation: https://doc.rust-lang.org/stable/
 - Go Documentation: https://golang.org/
