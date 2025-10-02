@@ -8,10 +8,10 @@ pub fn print_help() {
     println!("{} {}", "Usage:".bold().bright_white(), "nula <command> [options]".bright_white());
     println!("\n{}:", "Commands".bold().bright_green());
     println!("  {:<12} - Display this help message", "help / ?".bright_yellow());
-    println!("  {:<12} - Build project to assembly or binary (must be in project dir)", "build".bright_yellow());
-    println!("    {:<10} - Compile assembly files to binary using GCC", "--gcc".bright_magenta());
-    println!("    {:<10} - Build in release mode using Inkwell (LLVM)", "--release".bright_magenta());
-    println!("    {:<10} - Specify target architecture (e.g., x86_64, aarch64)", "--target <arch>".bright_magenta());
+    println!("  {:<12} - Build project to binary (must be in project dir)", "build".bright_yellow());
+    println!("    {:<10} - Build for Windows", "--windows".bright_magenta());
+    println!("    {:<10} - Build for Linux", "--linux".bright_magenta());
+    println!("    {:<10} - Build in release mode using Cranelift", "--release".bright_magenta());
     println!("    {:<10} - Enable verbose output", "--verbose".bright_magenta());
     println!("  {:<12} - Run a .nula file without compilation", "run [file]".bright_yellow());
     println!("  {:<12} - Check a .nula file for syntax errors", "check [file]".bright_yellow());
@@ -21,6 +21,8 @@ pub fn print_help() {
     println!("  {:<12} - Initialize Nula project in current directory", "init".bright_yellow());
     println!("  {:<12} - Install a dependency from Nula repository", "install <dep>".bright_yellow());
     println!("  {:<12} - Remove an installed dependency", "remove <dep>".bright_yellow());
+    println!("  {:<12} - Update installed dependencies", "update".bright_yellow());
+    println!("  {:<12} - Update Nula binaries to latest version", "update-nula".bright_yellow());
     println!("  {:<12} - Resolve and install all project dependencies", "resolve".bright_yellow());
     println!("\n{}", "Visit https://nula-lang.github.io/Nula-Website/ for more information".italic().bright_blue());
 }
