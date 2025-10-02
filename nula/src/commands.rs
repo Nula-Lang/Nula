@@ -1,10 +1,10 @@
 use crate::ast::AstNode;
-use crate::cli::{print_error, print_info, print_note, print_success, print_warning, print_compiling, print_parsing, print_optimizing, print_generating_asm, print_assembling, print_linking, print_finished, print_verbose, print_parse_error};
+use crate::cli::{print_error, print_info, print_note, print_success, print_warning, print_compiling, print_parsing, print_optimizing, print_finished, print_verbose, print_parse_error};
 use crate::cranelift_generator::generate_cranelift;
 use crate::interpreter::interpret_ast;
 use crate::optimizer::optimize_ast;
 use crate::parser::parse_nula_file;
-use crate::utils::{get_nula_go_path, get_nula_zig_path, is_in_project, get_lib_dir};
+use crate::utils::{get_nula_go_path, is_in_project, get_lib_dir};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -48,25 +48,25 @@ pub fn create_project(args: &[String]) {
         write "It's the answer!"
 }
 "#;
-if let Err(e) = file.write_all(hello_code.as_bytes()) {
-    print_error(&format!("Failed to write to main.nula: {}", e));
-    return;
-}
-let config_file = path.join("nula.toml");
-let mut config = match File::create(&config_file) {
-    Ok(f) => f,
-    Err(e) => {
-        print_error(&format!("Failed to create nula.toml: {}", e));
+    if let Err(e) = file.write_all(hello_code.as_bytes()) {
+        print_error(&format!("Failed to write to main.nula: {}", e));
         return;
     }
-};
-let config_content = format!("[project]\nname = \"{}\"\nversion = \"0.1.0\"\n[dependencies]\n", name);
-if let Err(e) = config.write_all(config_content.as_bytes()) {
-    print_error(&format!("Failed to write to nula.toml: {}", e));
-    return;
-}
-print_success(&format!("Created project '{}'", name));
-print_note("Run 'nula build --windows' or 'nula build --linux' in the project directory to compile.");
+    let config_file = path.join("nula.toml");
+    let mut config = match File::create(&config_file) {
+        Ok(f) => f,
+        Err(e) => {
+            print_error(&format!("Failed to create nula.toml: {}", e));
+            return;
+        }
+    };
+    let config_content = format!("[project]\nname = \"{}\"\nversion = \"0.1.0\"\n[dependencies]\n", name);
+    if let Err(e) = config.write_all(config_content.as_bytes()) {
+        print_error(&format!("Failed to write to nula.toml: {}", e));
+        return;
+    }
+    print_success(&format!("Created project '{}'", name));
+    print_note("Run 'nula build --windows' or 'nula build --linux' in the project directory to compile.");
 }
 
 pub fn init_project() {
@@ -93,25 +93,25 @@ pub fn init_project() {
         write "It's the answer!"
 }
 "#;
-if let Err(e) = file.write_all(hello_code.as_bytes()) {
-    print_error(&format!("Failed to write to main.nula: {}", e));
-    return;
-}
-let config_file = Path::new("nula.toml");
-let mut config = match File::create(config_file) {
-    Ok(f) => f,
-    Err(e) => {
-        print_error(&format!("Failed to create nula.toml: {}", e));
+    if let Err(e) = file.write_all(hello_code.as_bytes()) {
+        print_error(&format!("Failed to write to main.nula: {}", e));
         return;
     }
-};
-let config_content = format!("[project]\nname = \"{}\"\nversion = \"0.1.0\"\n[dependencies]\n", name);
-if let Err(e) = config.write_all(config_content.as_bytes()) {
-    print_error(&format!("Failed to write to nula.toml: {}", e));
-    return;
-}
-print_success("Initialized project in current directory");
-print_note("Run 'nula build --windows' or 'nula build --linux' to compile.");
+    let config_file = Path::new("nula.toml");
+    let mut config = match File::create(config_file) {
+        Ok(f) => f,
+        Err(e) => {
+            print_error(&format!("Failed to create nula.toml: {}", e));
+            return;
+        }
+    };
+    let config_content = format!("[project]\nname = \"{}\"\nversion = \"0.1.0\"\n[dependencies]\n", name);
+    if let Err(e) = config.write_all(config_content.as_bytes()) {
+        print_error(&format!("Failed to write to nula.toml: {}", e));
+        return;
+    }
+    print_success("Initialized project in current directory");
+    print_note("Run 'nula build --windows' or 'nula build --linux' to compile.");
 }
 
 pub fn install_dependency(args: &[String]) {
@@ -123,10 +123,10 @@ pub fn install_dependency(args: &[String]) {
     let nula_go = get_nula_go_path();
     print_info(&format!("Installing dependency '{}' using nula-go...", dep));
     let output = Command::new(nula_go)
-    .arg("install")
-    .arg(dep)
-    .output()
-    .expect("Failed to execute nula-go");
+        .arg("install")
+        .arg(dep)
+        .output()
+        .expect("Failed to execute nula-go");
     if output.status.success() {
         print_success(&String::from_utf8_lossy(&output.stdout).to_string());
     } else {
@@ -157,9 +157,9 @@ pub fn update_dependencies() {
     let nula_go = get_nula_go_path();
     print_info("Updating installed dependencies with nula-go...");
     let output = Command::new(nula_go)
-    .arg("update")
-    .output()
-    .expect("Failed to execute nula-go for update");
+        .arg("update")
+        .output()
+        .expect("Failed to execute nula-go for update");
     if output.status.success() {
         print_success(&String::from_utf8_lossy(&output.stdout).to_string());
     } else {
@@ -172,8 +172,18 @@ pub fn update_nula() {
     let version_path = home.join(".nula/release/version.toml");
     let current_version = match fs::read_to_string(&version_path) {
         Ok(content) => {
-            let toml_value: Value = content.parse().unwrap_or_default();
-            toml_value.get("Nula Lang").and_then(|v| v.get("Version")).and_then(|v| v.as_str()).unwrap_or("v0.0").to_string()
+            match content.parse::<Value>() {
+                Ok(toml_value) => toml_value
+                    .get("Nula Lang")
+                    .and_then(|v| v.get("Version"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("v0.0")
+                    .to_string(),
+                Err(_) => {
+                    print_error("Failed to parse version.toml");
+                    return;
+                }
+            }
         }
         Err(_) => {
             print_error("Failed to read version.toml");
@@ -184,9 +194,11 @@ pub fn update_nula() {
     print_info(&format!("Current version: {}", current_version));
 
     let client = Client::new();
-    let response = match client.get("https://api.github.com/repos/Nula-Lang/Nula/releases/latest")
-    .header("User-Agent", "nula-updater")
-    .send() {
+    let response = match client
+        .get("https://api.github.com/repos/Nula-Lang/Nula/releases/latest")
+        .header("User-Agent", "nula-updater")
+        .send()
+    {
         Ok(r) => r,
         Err(e) => {
             print_error(&format!("Failed to fetch latest release: {}", e));
@@ -220,7 +232,11 @@ pub fn update_nula() {
     ];
 
     for cmd in cmds {
-        let output = Command::new("sh").arg("-c").arg(cmd).output().expect("Failed to execute update command");
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .output()
+            .expect("Failed to execute update command");
         if !output.status.success() {
             print_error(&String::from_utf8_lossy(&output.stderr).to_string());
             return;
@@ -243,8 +259,16 @@ pub fn build_project(args: &[String], config: &Value) {
         return;
     }
 
-    let project_name = config.get("project").and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("unknown");
-    let project_version = config.get("project").and_then(|p| p.get("version")).and_then(|v| v.as_str()).unwrap_or("0.1.0");
+    let project_name = config
+        .get("project")
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("unknown");
+    let project_version = config
+        .get("project")
+        .and_then(|p| p.get("version"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("0.1.0");
     print_info(&format!("Building {} v{}...", project_name, project_version));
 
     let start = Instant::now();
@@ -456,7 +480,13 @@ pub fn test_project(_args: &[String]) {
     print_info("Scanning for test files...");
     let mut test_files = vec![];
     for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
-        if entry.path().file_name().and_then(|n| n.to_str()).map(|n| n.starts_with("test_") && n.ends_with(".nula")).unwrap_or(false) {
+        if entry
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.starts_with("test_") && n.ends_with(".nula"))
+            .unwrap_or(false)
+        {
             test_files.push(entry.path().to_path_buf());
         }
     }
