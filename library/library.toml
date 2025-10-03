@@ -1,0 +1,11 @@
+[crypha-cybersecurity]
+type = "git"
+url = "https://github.com/Nula-Lang/crypha-lib.git"
+
+[luma-cli]
+type = "bin"
+url = "https://github.com/Nula-Lang/luma-lib/archive/refs/tags/0.1.zip"
+
+[obsidian-gui]
+type = "tar"
+url = ""
