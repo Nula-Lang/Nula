@@ -11,11 +11,11 @@ Nula is a modern programming language created on September 28, 2025, designed fo
 The Nula project actively maintains security updates for specific versions of the language. Below is a table detailing the support status for each version as of October 2025.
 
 | Version | Supported |
-|---------|-----------|
-| v0.3.x  | ✅ Fully Supported - Receives security updates and bug fixes. |
-| v0.2.x  | ✅ Partially Supported - Critical security updates only. |
-| v0.1.x  | ❌ Not Supported - No security updates; upgrade to v0.3.x recommended. |
-| < v0.1  | ❌ Not Supported - No security updates; considered obsolete. |
+|-------|-------------------|
+| v0.4  | ❌ Problems with arguments write etc. the compiler does not work |
+| v0.3  | ❌ Not Supported. |
+| v0.2  | ❌ Not Supported. |
+| v0.1  | ❌ Not Supported. |
 
 > **Note**:  
 > Fully Supported versions receive regular security patches, bug fixes, and performance improvements.  
