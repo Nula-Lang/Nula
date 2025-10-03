@@ -311,6 +311,8 @@ Nula combines the simplicity of Python-like syntax with the performance of Zig, 
 
 As a new language (created in 2025), Nula is in its early stages. It is suitable for experimentation and prototyping, and we encourage community feedback to improve its readiness.
 
+Nula is unsuitable for programming; even basic dependencies like write don't work. That's why I need developers to support and develop the project.
+
 === Where can I find more examples?
 
 Visit the GitHub repository at https://github.com/Nula-Lang/Nula/ for additional examples, or contribute your own to the community.
