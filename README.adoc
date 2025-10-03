@@ -174,7 +174,7 @@ Dependencies can be included using angle brackets or specific files.
 write math.sqrt(16)  @ Outputs 4
 ----
 
-Alternatively, use package files like `bottles.nula` for managing multiple dependencies.
+Alternatively, use package files like `nula.toml` for managing multiple dependencies.
 
 == CLI Commands
 
