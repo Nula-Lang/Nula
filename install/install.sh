@@ -87,9 +87,9 @@ else
     exit 1
 fi
 # Download files with vibrant colors
-download_with_spinner "https://github.com/Nula-Lang/Nula/releases/download/v0.3/nula-zig" "/tmp/nula-install/nula-zig" "Nula Zig binary"
-download_with_spinner "https://github.com/Nula-Lang/Nula/releases/download/v0.3/nula-go" "/tmp/nula-install/nula-go" "Nula Go binary"
-download_with_spinner "https://github.com/Nula-Lang/Nula/releases/download/v0.3/nula" "/tmp/nula-install/nula" "Nula main binary"
+download_with_spinner "https://github.com/Nula-Lang/Nula/releases/download/v0.4/nula-zig" "/tmp/nula-install/nula-zig" "Nula Zig binary"
+download_with_spinner "https://github.com/Nula-Lang/Nula/releases/download/v0.4/nula-go" "/tmp/nula-install/nula-go" "Nula Go binary"
+download_with_spinner "https://github.com/Nula-Lang/Nula/releases/download/v0.4/nula" "/tmp/nula-install/nula" "Nula main binary"
 download_with_spinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula.png" "/tmp/nula-install/nula.png" "Nula icon"
 download_with_spinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-terminal.sh" "/tmp/nula-install/nula-terminal.sh" "Nula terminal script"
 download_with_spinner "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-lang.desktop" "/tmp/nula-install/nula-lang.desktop" "Nula desktop file"
