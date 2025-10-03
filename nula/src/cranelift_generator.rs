@@ -19,7 +19,7 @@ use std::str::FromStr;
 #[derive(Debug)]
 enum CraneliftValue {
     Float(Value),
-    Pointer(Value),
+    Pointer(()),
 }
 
 impl CraneliftValue {
@@ -30,37 +30,18 @@ impl CraneliftValue {
             panic!("Expected float value");
         }
     }
-
-    fn expect_pointer(self) -> Value {
-        if let CraneliftValue::Pointer(v) = self {
-            v
-        } else {
-            panic!("Expected pointer value");
-        }
-    }
-
-    fn as_value(self) -> Value {
-        match self {
-            CraneliftValue::Float(v) => v,
-            CraneliftValue::Pointer(v) => v,
-        }
-    }
 }
 
 pub fn generate_cranelift(ast: &AstNode, project_name: &str, release: bool, target: &str) -> Result<(), String> {
     let mut flag_builder = settings::builder();
     flag_builder.set("opt_level", if release { "speed" } else { "none" }).map_err(|e| format!("{}", e))?;
-
     let triple = Triple::from_str(target).map_err(|e| format!("Invalid target: {}", e))?;
     let isa_builder = isa::lookup(triple.clone()).map_err(|e| format!("{}", e))?;
     let isa = isa_builder.finish(settings::Flags::new(flag_builder)).map_err(|e| format!("{}", e))?;
-
     let builder = ObjectBuilder::new(isa, project_name.as_bytes().to_vec(), cranelift_module::default_libcall_names())
     .map_err(|e| format!("{}", e))?;
     let mut module = ObjectModule::new(builder);
-
     let pointer_type = module.isa().pointer_type();
-
     // Declare printf
     let mut printf_sig = module.make_signature();
     printf_sig.params.push(AbiParam::new(pointer_type));
@@ -70,7 +51,6 @@ pub fn generate_cranelift(ast: &AstNode, project_name: &str, release: bool, targ
     let printf = module
     .declare_function("printf", Linkage::Import, &printf_sig)
     .map_err(|e| format!("{}", e))?;
-
     // Main function
     let mut main_sig = module.make_signature();
     main_sig.returns.push(AbiParam::new(types::I32));
@@ -78,36 +58,27 @@ pub fn generate_cranelift(ast: &AstNode, project_name: &str, release: bool, targ
     let main = module
     .declare_function("main", Linkage::Export, &main_sig)
     .map_err(|e| format!("{}", e))?;
-
     let mut func = Function::with_name_signature(UserFuncName::testcase("main"), main_sig.clone());
     let mut func_ctx = FunctionBuilderContext::new();
     let mut builder = FunctionBuilder::new(&mut func, &mut func_ctx);
-
     let entry = builder.create_block();
     builder.switch_to_block(entry);
     builder.seal_block(entry);
-
     let mut env: HashMap<String, StackSlot> = HashMap::new();
     let mut var_count = 0;
     let mut data_count = 0;
-
     build_cranelift_node(ast, &mut builder, &mut module, main, &mut env, &mut var_count, &mut data_count, printf)?;
-
     let zero = builder.ins().iconst(types::I32, 0);
     builder.ins().return_(&[zero]);
-
     builder.finalize();
-
     let mut ctx = CodegenContext::new();
     ctx.func = func;
     module.define_function(main, &mut ctx).map_err(|e| format!("{}", e))?;
-
     let product = module.finish();
     let obj = product.emit().map_err(|e| format!("{}", e))?;
     let obj_path = format!("{}.o", project_name);
     let mut file = File::create(&obj_path).map_err(|e| format!("Failed to create object file: {}", e))?;
     file.write_all(&obj).map_err(|e| format!("Failed to write object file: {}", e))?;
-
     // Link
     let bin_path = if target.contains("windows") {
         format!("{}.exe", project_name)
@@ -142,7 +113,6 @@ pub fn generate_cranelift(ast: &AstNode, project_name: &str, release: bool, targ
     } else {
         return Err("Unsupported target for linking".to_string());
     }
-
     Ok(())
 }
 
@@ -195,7 +165,6 @@ fn build_cranelift_node(
             let fn_id = module
             .declare_function(name, Linkage::Local, &sig)
             .map_err(|e| format!("{}", e))?;
-
             let mut func = Function::with_name_signature(UserFuncName::testcase(name), sig.clone());
             let mut fn_ctx = FunctionBuilderContext::new();
             let mut local_builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
@@ -203,7 +172,6 @@ fn build_cranelift_node(
             local_builder.append_block_params_for_function_params(entry);
             local_builder.switch_to_block(entry);
             local_builder.seal_block(entry);
-
             let mut local_env = env.clone();
             for (i, param_name) in params.iter().enumerate() {
                 let param = local_builder.block_params(entry)[i];
@@ -211,18 +179,14 @@ fn build_cranelift_node(
                 local_builder.ins().stack_store(param, stack_slot, 0);
                 local_env.insert(param_name.clone(), stack_slot);
             }
-
             for stmt in body {
                 build_cranelift_node(stmt, &mut local_builder, module, fn_id, &mut local_env, var_count, data_count, printf)?;
             }
-
             if !local_builder.is_unreachable() {
                 let zero = local_builder.ins().f64const(0.0);
                 local_builder.ins().return_(&[zero]);
             }
-
             local_builder.finalize();
-
             let mut ctx = CodegenContext::new();
             ctx.func = func;
             module.define_function(fn_id, &mut ctx).map_err(|e| format!("{}", e))?;
@@ -232,21 +196,17 @@ fn build_cranelift_node(
             let end = build_cranelift_expression(iter, builder, module, env, var_count, data_count, printf)?.expect_float();
             let var_slot = builder.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, types::F64.bytes()));
             builder.ins().stack_store(start, var_slot, 0);
-
             let loop_bb = builder.create_block();
             let body_bb = builder.create_block();
             let inc_bb = builder.create_block();
             let after_bb = builder.create_block();
-
             builder.ins().jump(loop_bb, &[]);
             builder.switch_to_block(loop_bb);
             builder.seal_block(loop_bb);
-
             let var_val = builder.ins().stack_load(types::F64, var_slot, 0);
             let cond = builder.ins().fcmp(FloatCC::LessThan, var_val, end);
             builder.ins().brnz(cond, body_bb, &[]);
             builder.ins().jump(after_bb, &[]);
-
             builder.switch_to_block(body_bb);
             let mut loop_env = env.clone();
             loop_env.insert(var.clone(), var_slot);
@@ -255,7 +215,6 @@ fn build_cranelift_node(
             }
             builder.ins().jump(inc_bb, &[]);
             builder.seal_block(body_bb);
-
             builder.switch_to_block(inc_bb);
             let var_val = builder.ins().stack_load(types::F64, var_slot, 0);
             let step = builder.ins().f64const(1.0);
@@ -263,7 +222,6 @@ fn build_cranelift_node(
             builder.ins().stack_store(next, var_slot, 0);
             builder.ins().jump(loop_bb, &[]);
             builder.seal_block(inc_bb);
-
             builder.switch_to_block(after_bb);
             builder.seal_block(after_bb);
         }
@@ -271,7 +229,6 @@ fn build_cranelift_node(
             let loop_bb = builder.create_block();
             let body_bb = builder.create_block();
             let after_bb = builder.create_block();
-
             builder.ins().jump(loop_bb, &[]);
             builder.switch_to_block(loop_bb);
             let cond_val = build_cranelift_expression(cond, builder, module, env, var_count, data_count, printf)?.expect_float();
@@ -280,14 +237,12 @@ fn build_cranelift_node(
             builder.ins().brnz(cond_bool, body_bb, &[]);
             builder.ins().jump(after_bb, &[]);
             builder.seal_block(loop_bb);
-
             builder.switch_to_block(body_bb);
             for stmt in body {
                 build_cranelift_node(stmt, builder, module, current_fn, env, var_count, data_count, printf)?;
             }
             builder.ins().jump(loop_bb, &[]);
             builder.seal_block(body_bb);
-
             builder.switch_to_block(after_bb);
             builder.seal_block(after_bb);
         }
@@ -298,18 +253,15 @@ fn build_cranelift_node(
             let then_bb = builder.create_block();
             let mut next_bb = builder.create_block();
             let cont_bb = builder.create_block();
-
             builder.ins().brnz(cond_bool, then_bb, &[]);
             builder.ins().jump(next_bb, &[]);
             builder.seal_block(builder.current_block().unwrap());
-
             builder.switch_to_block(then_bb);
             for stmt in body {
                 build_cranelift_node(stmt, builder, module, current_fn, env, var_count, data_count, printf)?;
             }
             builder.ins().jump(cont_bb, &[]);
             builder.seal_block(then_bb);
-
             builder.switch_to_block(next_bb);
             for (ei_cond, ei_body) in else_ifs {
                 let ei_cond_val = build_cranelift_expression(ei_cond, builder, module, env, var_count, data_count, printf)?.expect_float();
@@ -317,18 +269,15 @@ fn build_cranelift_node(
                 let ei_cond_bool = builder.ins().fcmp(FloatCC::NotEqual, ei_cond_val, zero);
                 let ei_then_bb = builder.create_block();
                 let ei_else_bb = builder.create_block();
-
                 builder.ins().brnz(ei_cond_bool, ei_then_bb, &[]);
                 builder.ins().jump(ei_else_bb, &[]);
                 builder.seal_block(builder.current_block().unwrap());
-
                 builder.switch_to_block(ei_then_bb);
                 for stmt in ei_body {
                     build_cranelift_node(stmt, builder, module, current_fn, env, var_count, data_count, printf)?;
                 }
                 builder.ins().jump(cont_bb, &[]);
                 builder.seal_block(ei_then_bb);
-
                 next_bb = ei_else_bb;
                 builder.switch_to_block(next_bb);
             }
@@ -339,7 +288,6 @@ fn build_cranelift_node(
             }
             builder.ins().jump(cont_bb, &[]);
             builder.seal_block(next_bb);
-
             builder.switch_to_block(cont_bb);
             builder.seal_block(cont_bb);
         }
@@ -398,7 +346,8 @@ fn build_cranelift_expression(
             let data_id = create_string_constant(module, s, data_count)?;
             let gv = module.declare_data_in_func(data_id, builder.func);
             let ptr = builder.ins().global_value(module.isa().pointer_type(), gv);
-            Ok(CraneliftValue::Pointer(ptr))
+            let _ = ptr;
+            Ok(CraneliftValue::Pointer(()))
         }
         AstNode::NumberLit(num) => {
             let val = builder.ins().f64const(*num);
