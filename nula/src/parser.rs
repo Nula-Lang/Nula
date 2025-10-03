@@ -32,6 +32,9 @@ pub fn parse_nula_file(path: &Path) -> Result<AstNode, pest::error::Error<Rule>>
 fn build_ast(pairs: Pairs<Rule>) -> AstNode {
     let mut nodes = vec![];
     for pair in pairs {
+        if pair.as_rule() == Rule::COMMENT {
+            continue; // Skip comments in top-level
+        }
         nodes.push(build_node(pair));
     }
     AstNode::Program(nodes)
@@ -42,86 +45,199 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
     match pair.as_rule() {
         Rule::translation => {
             let mut inner = pair.into_inner();
-            let ident = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-            let code_block = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+            // Skip "#" and "="
+            inner.next();
+            inner.next();
+            let ident = inner
+            .next()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_default();
+            let code_block = inner
+            .next()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_default();
             let translated = translate_code(&ident, &code_block);
             AstNode::Translation(ident, translated)
         }
-        Rule::dependency => AstNode::Dependency(pair.into_inner().next().map(|p| p.as_str().to_string()).unwrap_or_default()),
-        Rule::import_stmt => AstNode::Import(pair.into_inner().next().map(|p| p.as_str().to_string()).unwrap_or_default()),
+        Rule::dependency => AstNode::Dependency(
+            pair.into_inner()
+            .next()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_default(),
+        ),
+        Rule::import_stmt => AstNode::Import(
+            pair.into_inner()
+            .next()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_default(),
+        ),
+        Rule::statement => {
+            let mut inner = pair.into_inner();
+            let stmt = inner.next().unwrap();
+            build_node(stmt)
+        }
         Rule::variable_decl => {
             let mut inner = pair.into_inner();
-            let ident = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-            let expr = inner.next().map(build_expression).unwrap_or(AstNode::NumberLit(0.0));
+            let ident = inner
+            .next()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_default();
+            let expr = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::StringLit("".to_string()));
             AstNode::VariableDecl(ident, Box::new(expr))
         }
         Rule::assignment => {
             let mut inner = pair.into_inner();
-            let ident = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-            let expr = inner.next().map(build_expression).unwrap_or(AstNode::NumberLit(0.0));
+            // Skip "set"
+            inner.next();
+            let ident = inner
+            .next()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_default();
+            let expr = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::StringLit("".to_string()));
             AstNode::Assignment(ident, Box::new(expr))
         }
         Rule::function_def => {
             let mut inner = pair.into_inner();
-            let name = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-            let params = inner.next().map(|p| p.into_inner().map(|i| i.as_str().to_string()).collect()).unwrap_or_default();
-            let body = inner.next().map(|p| p.into_inner().map(build_node).collect()).unwrap_or_default();
+            let name = inner
+            .next()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_default();
+            let params_pair = inner.next();
+            let params = params_pair
+            .map(|p| p.into_inner().map(|i| i.as_str().to_string()).collect())
+            .unwrap_or_default();
+            let body_pair = inner.next();
+            let body = body_pair
+            .map(|p| {
+                let statements = p.into_inner();
+                statements.map(build_node).collect()
+            })
+            .unwrap_or_default();
             AstNode::FunctionDef(name, params, body)
         }
         Rule::for_loop => {
             let mut inner = pair.into_inner();
-            let var = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
-            let iter = inner.next().map(build_expression).unwrap_or(AstNode::NumberLit(0.0));
-            let body = inner.next().map(|p| p.into_inner().map(build_node).collect()).unwrap_or_default();
+            let var = inner
+            .next()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_default();
+            let iter = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::NumberLit(0.0));
+            let body_pair = inner.next().unwrap(); // Block or do..end
+            let body = body_pair
+            .into_inner()
+            .map(build_node)
+            .collect();
             AstNode::ForLoop(var, Box::new(iter), body)
         }
         Rule::while_loop => {
             let mut inner = pair.into_inner();
-            let cond = inner.next().map(build_expression).unwrap_or(AstNode::BoolLit(false));
-            let block = inner.next().unwrap();
-            let body = block.into_inner().map(build_node).collect::<Vec<AstNode>>();
+            let cond = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::BoolLit(false));
+            let body_pair = inner.next().unwrap(); // Block or do..end
+            let body = body_pair
+            .into_inner()
+            .map(build_node)
+            .collect();
             AstNode::WhileLoop(Box::new(cond), body)
         }
         Rule::conditional => {
             let mut inner = pair.into_inner();
-            let cond = inner.next().map(build_expression).unwrap_or(AstNode::BoolLit(false));
-            let block = inner.next().unwrap();
-            let body = block.into_inner().map(build_node).collect::<Vec<AstNode>>();
+            let cond = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::BoolLit(false));
+            let body_pair = inner.next().unwrap();
+            let body = body_pair
+            .into_inner()
+            .map(build_node)
+            .collect();
             let mut else_ifs = vec![];
             let mut else_body = None;
             for el in inner {
-                if el.as_rule() == Rule::else_if {
-                    let mut ei_inner = el.into_inner();
-                    let ei_cond = ei_inner.next().map(build_expression).unwrap_or(AstNode::BoolLit(false));
-                    let ei_block = ei_inner.next().unwrap();
-                    let ei_body = ei_block.into_inner().map(build_node).collect::<Vec<AstNode>>();
-                    else_ifs.push((Box::new(ei_cond), ei_body));
-                } else if el.as_rule() == Rule::else_clause {
-                    let el_block = el.into_inner().next().unwrap();
-                    else_body = Some(el_block.into_inner().map(build_node).collect::<Vec<AstNode>>());
+                match el.as_rule() {
+                    Rule::else_if => {
+                        let mut ei_inner = el.into_inner();
+                        let ei_cond = ei_inner
+                        .next()
+                        .map(build_expression)
+                        .unwrap_or(AstNode::BoolLit(false));
+                        let ei_body_pair = ei_inner.next().unwrap();
+                        let ei_body = ei_body_pair
+                        .into_inner()
+                        .map(build_node)
+                        .collect();
+                        else_ifs.push((Box::new(ei_cond), ei_body));
+                    }
+                    Rule::else_clause => {
+                        let el_body_pair = el.into_inner().next().unwrap();
+                        let el_body = el_body_pair
+                        .into_inner()
+                        .map(build_node)
+                        .collect();
+                        else_body = Some(el_body);
+                    }
+                    _ => {}
                 }
             }
             AstNode::If(Box::new(cond), body, else_ifs, else_body)
         }
-        Rule::write_stmt => AstNode::Write(Box::new(pair.into_inner().next().map(build_expression).unwrap_or(AstNode::NumberLit(0.0)))),
+        Rule::write_stmt => AstNode::Write(Box::new(
+            pair.into_inner()
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::StringLit("".to_string())),
+        )),
         Rule::add_stmt => {
             let mut inner = pair.into_inner();
-            let left = inner.next().map(build_expression).unwrap_or(AstNode::NumberLit(0.0));
-            let right = inner.next().map(build_expression).unwrap_or(AstNode::NumberLit(0.0));
+            // Skip "add"
+            inner.next();
+            let left = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::NumberLit(0.0));
+            let right = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::NumberLit(0.0));
             AstNode::Add(Box::new(left), Box::new(right))
         }
         Rule::mul_stmt => {
             let mut inner = pair.into_inner();
-            let left = inner.next().map(build_expression).unwrap_or(AstNode::NumberLit(0.0));
-            let right = inner.next().map(build_expression).unwrap_or(AstNode::NumberLit(0.0));
+            // Skip "mul"
+            inner.next();
+            let left = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::NumberLit(0.0));
+            let right = inner
+            .next()
+            .map(build_expression)
+            .unwrap_or(AstNode::NumberLit(0.0));
             AstNode::Mul(Box::new(left), Box::new(right))
         }
-        Rule::return_stmt => AstNode::Return(pair.into_inner().next().map(|p| Box::new(build_expression(p)))),
+        Rule::return_stmt => AstNode::Return(
+            pair.into_inner()
+            .next()
+            .map(|p| Box::new(build_expression(p))),
+        ),
         Rule::expression => build_expression(pair.into_inner().next().unwrap()),
-        _ => AstNode::Comment(pair.as_str().to_string()),
+        Rule::COMMENT => AstNode::Comment(pair.as_str().to_string()),
+        _ => AstNode::Comment(format!("Unknown rule: {:?}", pair.as_rule())),
     }
 }
 
+// Funkcje do budowania wyrażeń (bez zmian, ale dla kompletności)
 fn build_expression(pair: Pair<Rule>) -> AstNode {
     let mut inner = pair.into_inner();
     let mut left = build_logic_expr(inner.next().unwrap());
@@ -191,17 +307,24 @@ fn build_unary_expr(pair: Pair<Rule>) -> AstNode {
 
 fn build_primary(pair: Pair<Rule>) -> AstNode {
     match pair.as_rule() {
-        Rule::string => AstNode::StringLit(pair.as_str().trim_matches(|c| c == '"' || c == '\'').to_string()),
+        Rule::string => AstNode::StringLit(
+            pair.as_str()
+            .trim_matches(|c| c == '"' || c == '\'')
+            .to_string(),
+        ),
         Rule::number => AstNode::NumberLit(pair.as_str().parse::<f64>().unwrap_or(0.0)),
         Rule::bool => AstNode::BoolLit(pair.as_str() == "true"),
         Rule::ident => AstNode::Ident(pair.as_str().to_string()),
         Rule::call => {
             let mut inner = pair.into_inner();
             let name = inner.next().unwrap().as_str().to_string();
-            let args = inner.next().map(|arg_list| arg_list.into_inner().map(build_expression).collect()).unwrap_or(vec![]);
+            let args_pair = inner.next();
+            let args = args_pair
+            .map(|arg_list| arg_list.into_inner().map(build_expression).collect())
+            .unwrap_or(vec![]);
             AstNode::Call(name, args)
         }
         Rule::paren_expr => build_expression(pair.into_inner().next().unwrap()),
-        _ => AstNode::Comment(pair.as_str().to_string()),
+        _ => AstNode::Comment(format!("Unknown primary: {:?}", pair.as_rule())),
     }
 }
