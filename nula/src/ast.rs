@@ -2,8 +2,8 @@
 pub enum AstNode {
     Program(Vec<AstNode>),
     Translation(String, String), // lang, code
-    Dependency(String),
-    Import(String),
+    Dependency(String), // Supports both ident and file_path
+    Import(String),     // Supports both ident and file_path
     Comment(String),
     VariableDecl(String, Box<AstNode>),
     Assignment(String, Box<AstNode>),
