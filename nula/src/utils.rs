@@ -22,6 +22,7 @@ pub fn get_nula_go_path() -> PathBuf {
     path
 }
 
+#[allow(dead_code)]
 pub fn get_nula_zig_path() -> PathBuf {
     let path = get_lib_dir().join(if cfg!(target_os = "windows") { "nula-zig.exe" } else { "nula-zig" });
     if !path.exists() {
