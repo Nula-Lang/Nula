@@ -4,13 +4,13 @@ use std::collections::HashMap;
 
 pub fn interpret_ast(ast: &AstNode) -> f64 {
     print_info("Starting interpretation...");
-    let mut variables: HashMap<String, AstNode> = HashMap::new();
+    let mut variables: HashMap<String, Box<AstNode>> = HashMap::new();
     let result = interpret_node(ast, &mut variables);
     print_info("Interpretation completed");
     result
 }
 
-fn interpret_node(node: &AstNode, vars: &mut HashMap<String, AstNode>) -> f64 {
+fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f64 {
     match node {
         AstNode::Program(nodes) => {
             let mut result = 0.0;
@@ -33,23 +33,25 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, AstNode>) -> f64 {
         }
         AstNode::Comment(_) => 0.0,
         AstNode::VariableDecl(name, expr) => {
-            let value = interpret_node(expr, vars);
-            vars.insert(name.clone(), AstNode::NumberLit(value));
+            vars.insert(name.clone(), expr.clone());
             0.0
         }
         AstNode::Assignment(name, expr) => {
-            let value = interpret_node(expr, vars);
-            vars.insert(name.clone(), AstNode::NumberLit(value));
+            vars.insert(name.clone(), expr.clone());
             0.0
         }
         AstNode::FunctionDef(name, params, body) => {
-            vars.insert(name.clone(), AstNode::FunctionDef(name.clone(), params.clone(), body.clone()));
+            vars.insert(name.clone(), Box::new(AstNode::FunctionDef(
+                name.clone(),
+                                                                    params.clone(),
+                                                                    body.clone(),
+            )));
             0.0
         }
         AstNode::ForLoop(var, iter, body) => {
             let iter_val = interpret_node(iter, vars) as i32;
             for i in 0..iter_val {
-                vars.insert(var.clone(), AstNode::NumberLit(i as f64));
+                vars.insert(var.clone(), Box::new(AstNode::NumberLit(i as f64)));
                 for stmt in body {
                     interpret_node(stmt, vars);
                 }
@@ -91,66 +93,103 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, AstNode>) -> f64 {
             0.0
         }
         AstNode::Write(expr) => {
-            let result = interpret_node(expr, vars);
-            match expr.as_ref() {
+            let expr_ref = expr.as_ref();
+            match expr_ref {
                 AstNode::StringLit(s) => {
-                    print!("{}", s);
+                    println!("{}", s);
                     0.0
                 }
-                AstNode::NumberLit(_) => {
-                    print!("{}", result);
-                    result
+                AstNode::NumberLit(n) => {
+                    println!("{}", n);
+                    *n
                 }
                 AstNode::BoolLit(b) => {
-                    print!("{}", b);
+                    println!("{}", b);
                     if *b { 1.0 } else { 0.0 }
                 }
                 AstNode::Ident(name) => {
-                    let val = vars.get(name).cloned().unwrap_or(AstNode::NumberLit(0.0));
-                    let result = interpret_node(&val, vars);
-                    print!("{}", result);
+                    let val = vars.get(name).cloned();
+                    if let Some(val) = val {
+                        let val_ref = val.as_ref();
+                        match val_ref {
+                            AstNode::StringLit(s) => {
+                                println!("{}", s);
+                                0.0
+                            }
+                            AstNode::NumberLit(n) => {
+                                println!("{}", n);
+                                *n
+                            }
+                            AstNode::BoolLit(b) => {
+                                println!("{}", b);
+                                if *b { 1.0 } else { 0.0 }
+                            }
+                            _ => {
+                                let result = interpret_node(val_ref, vars);
+                                println!("{}", result);
+                                result
+                            }
+                        }
+                    } else {
+                        println!("undefined");
+                        0.0
+                    }
+                }
+                AstNode::Binary(left, op, right) => {
+                    let result = interpret_node(&AstNode::Binary(left.clone(), op.clone(), right.clone()), vars);
+                    println!("{}", result);
+                    result
+                }
+                AstNode::Call(name, args) => {
+                    let result = interpret_node(&AstNode::Call(name.clone(), args.clone()), vars);
+                    println!("{}", result);
                     result
                 }
                 _ => {
-                    print!("{}", result);
+                    let result = interpret_node(expr_ref, vars);
+                    println!("{}", result);
                     result
                 }
             }
         }
         AstNode::Add(left, right) => interpret_node(left, vars) + interpret_node(right, vars),
         AstNode::Mul(left, right) => interpret_node(left, vars) * interpret_node(right, vars),
-        AstNode::Return(expr) => {
-            if let Some(e) = expr {
-                interpret_node(e, vars)
+        AstNode::Return(expr_opt) => {
+            if let Some(expr) = expr_opt {
+                interpret_node(expr.as_ref(), vars)
             } else {
                 0.0
             }
         }
-        AstNode::StringLit(s) => {
-            print!("{}", s);
-            0.0
-        }
+        AstNode::StringLit(_) => 0.0,
         AstNode::NumberLit(num) => *num,
         AstNode::BoolLit(b) => if *b { 1.0 } else { 0.0 },
         AstNode::Ident(name) => {
-            match vars.get(name).cloned().unwrap_or(AstNode::NumberLit(0.0)) {
-                AstNode::NumberLit(n) => n,
-                AstNode::BoolLit(b) => if b { 1.0 } else { 0.0 },
-                other => interpret_node(&other, vars),
+            let val = vars.get(name).cloned();
+            if let Some(val) = val {
+                interpret_node(val.as_ref(), vars)
+            } else {
+                0.0
             }
         }
         AstNode::Call(name, args) => {
-            if let Some(AstNode::FunctionDef(_, params, body)) = vars.get(name).cloned() {
-                let mut local_vars = vars.clone();
-                for (param, arg) in params.iter().zip(args.iter()) {
-                    let arg_val = interpret_node(arg, vars);
-                    local_vars.insert(param.clone(), AstNode::NumberLit(arg_val));
+            let func_box = vars.get(name).cloned();
+            if let Some(func_box) = func_box {
+                let func_ref = func_box.as_ref();
+                if let AstNode::FunctionDef(_, params, body) = func_ref {
+                    let mut local_vars = vars.clone();
+                    for (param, arg) in params.iter().zip(args.iter()) {
+                        let arg_val = interpret_node(arg, vars);
+                        local_vars.insert(param.clone(), Box::new(AstNode::NumberLit(arg_val)));
+                    }
+                    let mut result = 0.0;
+                    for stmt in body {
+                        result = interpret_node(stmt, &mut local_vars);
+                    }
+                    result
+                } else {
+                    0.0
                 }
-                let mut result = 0.0;
-                for stmt in body {
-                    result = interpret_node(&stmt, &mut local_vars);
-                }
-                result
             } else {
                 0.0
             }
@@ -162,7 +201,7 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, AstNode>) -> f64 {
                 "+" => l + r,
                 "-" => l - r,
                 "*" => l * r,
-                "/" => l / r,
+                "/" => if r != 0.0 { l / r } else { 0.0 },
                 "==" | "eq" => if l == r { 1.0 } else { 0.0 },
                 "!=" | "ne" => if l != r { 1.0 } else { 0.0 },
                 "<" | "lt" => if l < r { 1.0 } else { 0.0 },
