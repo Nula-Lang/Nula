@@ -3,16 +3,20 @@ use crate::cli::print_info;
 use std::collections::HashMap;
 
 pub fn interpret_ast(ast: &AstNode) -> f64 {
+    println!("DEBUG: Starting interpretation of AST: {:?}", ast);
     print_info("Starting interpretation...");
     let mut variables: HashMap<String, Box<AstNode>> = HashMap::new();
     let result = interpret_node(ast, &mut variables);
+    println!("DEBUG: Interpretation result: {}", result);
     print_info("Interpretation completed");
     result
 }
 
 fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f64 {
+    println!("DEBUG: Interpreting node: {:?}", node);
     match node {
         AstNode::Program(nodes) => {
+            println!("DEBUG: Program with {} nodes", nodes.len());
             let mut result = 0.0;
             for n in nodes {
                 result = interpret_node(n, vars);
@@ -34,10 +38,12 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
         AstNode::Comment(_) => 0.0,
         AstNode::VariableDecl(name, expr) => {
             vars.insert(name.clone(), expr.clone());
+            println!("DEBUG: Declared variable {} = {:?}", name, expr);
             0.0
         }
         AstNode::Assignment(name, expr) => {
             vars.insert(name.clone(), expr.clone());
+            println!("DEBUG: Assigned variable {} = {:?}", name, expr);
             0.0
         }
         AstNode::FunctionDef(name, params, body) => {
@@ -46,37 +52,42 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
                                                                     params.clone(),
                                                                     body.clone(),
             )));
+            println!("DEBUG: Defined function {} with {} params", name, params.len());
             0.0
         }
         AstNode::ForLoop(var, iter, body) => {
-            let iter_val = interpret_node(iter, vars) as i32;
+            let iter_val = interpret_node(iter.as_ref(), vars) as i32;
+            println!("DEBUG: For loop {} in 0..{} with {} body statements", var, iter_val, body.len());
             for i in 0..iter_val {
                 vars.insert(var.clone(), Box::new(AstNode::NumberLit(i as f64)));
                 for stmt in body {
-                    interpret_node(stmt, vars);
+                    interpret_node(&stmt, vars);
                 }
             }
             0.0
         }
         AstNode::WhileLoop(cond, body) => {
-            while interpret_node(cond, vars) != 0.0 {
+            println!("DEBUG: While loop with {} body statements", body.len());
+            while interpret_node(cond.as_ref(), vars) != 0.0 {
                 for stmt in body {
-                    interpret_node(stmt, vars);
+                    interpret_node(&stmt, vars);
                 }
             }
             0.0
         }
         AstNode::If(cond, body, else_ifs, else_body) => {
-            if interpret_node(cond, vars) != 0.0 {
+            let cond_val = interpret_node(cond.as_ref(), vars);
+            println!("DEBUG: If cond = {}, body len = {}, else_ifs = {}, else_body = {:?}", cond_val, body.len(), else_ifs.len(), else_body.is_some());
+            if cond_val != 0.0 {
                 for stmt in body {
-                    interpret_node(stmt, vars);
+                    interpret_node(&stmt, vars);
                 }
             } else {
                 let mut executed = false;
                 for (ei_cond, ei_body) in else_ifs {
-                    if interpret_node(ei_cond, vars) != 0.0 {
+                    if interpret_node(ei_cond.as_ref(), vars) != 0.0 {
                         for stmt in ei_body {
-                            interpret_node(stmt, vars);
+                            interpret_node(&stmt, vars);
                         }
                         executed = true;
                         break;
@@ -85,7 +96,7 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
                 if !executed {
                     if let Some(eb) = else_body {
                         for stmt in eb {
-                            interpret_node(stmt, vars);
+                            interpret_node(&stmt, vars);
                         }
                     }
                 }
@@ -93,8 +104,9 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
             0.0
         }
         AstNode::Write(expr) => {
+            println!("DEBUG: Write statement with expr: {:?}", expr);
             let expr_ref = expr.as_ref();
-            match expr_ref {
+            let result = match expr_ref {
                 AstNode::StringLit(s) => {
                     println!("{}", s);
                     0.0
@@ -108,8 +120,7 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
                     if *b { 1.0 } else { 0.0 }
                 }
                 AstNode::Ident(name) => {
-                    let val = vars.get(name).cloned();
-                    if let Some(val) = val {
+                    if let Some(val) = vars.get(name).cloned() {
                         let val_ref = val.as_ref();
                         match val_ref {
                             AstNode::StringLit(s) => {
@@ -125,9 +136,9 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
                                 if *b { 1.0 } else { 0.0 }
                             }
                             _ => {
-                                let result = interpret_node(val_ref, vars);
-                                println!("{}", result);
-                                result
+                                let res = interpret_node(val_ref, vars);
+                                println!("{}", res);
+                                res
                             }
                         }
                     } else {
@@ -136,24 +147,35 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
                     }
                 }
                 AstNode::Binary(left, op, right) => {
-                    let result = interpret_node(&AstNode::Binary(left.clone(), op.clone(), right.clone()), vars);
-                    println!("{}", result);
-                    result
+                    let bin_node = AstNode::Binary(left.clone(), op.clone(), right.clone());
+                    let res = interpret_node(&bin_node, vars);
+                    println!("{}", res);
+                    res
                 }
                 AstNode::Call(name, args) => {
-                    let result = interpret_node(&AstNode::Call(name.clone(), args.clone()), vars);
-                    println!("{}", result);
-                    result
+                    let call_node = AstNode::Call(name.clone(), args.clone());
+                    let res = interpret_node(&call_node, vars);
+                    println!("{}", res);
+                    res
                 }
                 _ => {
-                    let result = interpret_node(expr_ref, vars);
-                    println!("{}", result);
-                    result
+                    let res = interpret_node(expr_ref, vars);
+                    println!("{}", res);
+                    res
                 }
-            }
+            };
+            result
         }
-        AstNode::Add(left, right) => interpret_node(left, vars) + interpret_node(right, vars),
-        AstNode::Mul(left, right) => interpret_node(left, vars) * interpret_node(right, vars),
+        AstNode::Add(left, right) => {
+            let l = interpret_node(left.as_ref(), vars);
+            let r = interpret_node(right.as_ref(), vars);
+            l + r
+        }
+        AstNode::Mul(left, right) => {
+            let l = interpret_node(left.as_ref(), vars);
+            let r = interpret_node(right.as_ref(), vars);
+            l * r
+        }
         AstNode::Return(expr_opt) => {
             if let Some(expr) = expr_opt {
                 interpret_node(expr.as_ref(), vars)
@@ -161,30 +183,34 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
                 0.0
             }
         }
-        AstNode::StringLit(_) => 0.0,
+        AstNode::StringLit(s) => {
+            println!("DEBUG: String lit: {}", s);
+            0.0
+        }
         AstNode::NumberLit(num) => *num,
         AstNode::BoolLit(b) => if *b { 1.0 } else { 0.0 },
         AstNode::Ident(name) => {
-            let val = vars.get(name).cloned();
-            if let Some(val) = val {
+            if let Some(val) = vars.get(name).cloned() {
                 interpret_node(val.as_ref(), vars)
             } else {
                 0.0
             }
         }
         AstNode::Call(name, args) => {
-            let func_box = vars.get(name).cloned();
-            if let Some(func_box) = func_box {
-                let func_ref = func_box.as_ref();
-                if let AstNode::FunctionDef(_, params, body) = func_ref {
+            if let Some(func_box) = vars.get(name).cloned() {
+                if let AstNode::FunctionDef(_, params, body) = func_box.as_ref() {
                     let mut local_vars = vars.clone();
                     for (param, arg) in params.iter().zip(args.iter()) {
                         let arg_val = interpret_node(arg, vars);
                         local_vars.insert(param.clone(), Box::new(AstNode::NumberLit(arg_val)));
                     }
                     let mut result = 0.0;
-                    for stmt in body {
-                        result = interpret_node(stmt, &mut local_vars);
+                    for stmt in body.iter() {
+                        let temp = interpret_node(stmt, &mut local_vars);
+                        result = temp;
+                        if let AstNode::Return(_) = *stmt {
+                            break;
+                        }
                     }
                     result
                 } else {
@@ -195,15 +221,15 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
             }
         }
         AstNode::Binary(left, op, right) => {
-            let l = interpret_node(left, vars);
-            let r = interpret_node(right, vars);
+            let l = interpret_node(left.as_ref(), vars);
+            let r = interpret_node(right.as_ref(), vars);
             match op.as_str() {
                 "+" => l + r,
                 "-" => l - r,
                 "*" => l * r,
                 "/" => if r != 0.0 { l / r } else { 0.0 },
-                "==" | "eq" => if l == r { 1.0 } else { 0.0 },
-                "!=" | "ne" => if l != r { 1.0 } else { 0.0 },
+                "==" | "eq" => if (l - r).abs() < f64::EPSILON { 1.0 } else { 0.0 },
+                "!=" | "ne" => if (l - r).abs() >= f64::EPSILON { 1.0 } else { 0.0 },
                 "<" | "lt" => if l < r { 1.0 } else { 0.0 },
                 ">" | "gt" => if l > r { 1.0 } else { 0.0 },
                 "<=" | "le" => if l <= r { 1.0 } else { 0.0 },
@@ -214,7 +240,7 @@ fn interpret_node(node: &AstNode, vars: &mut HashMap<String, Box<AstNode>>) -> f
             }
         }
         AstNode::Unary(op, expr) => {
-            let val = interpret_node(expr, vars);
+            let val = interpret_node(expr.as_ref(), vars);
             match op.as_str() {
                 "-" => -val,
                 "not" => if val == 0.0 { 1.0 } else { 0.0 },
