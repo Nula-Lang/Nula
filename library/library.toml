@@ -2,9 +2,9 @@
 type = "git"
 url = "https://github.com/Nula-Lang/crypha-lib.git"
 
-[luma-cli]
+[luma]
 type = "bin"
-url = "https://github.com/Nula-Lang/luma-lib/archive/refs/tags/0.1.zip"
+url = "https://github.com/Nula-Lang/luma-lib/releases/download/v0.1/luma-lib"
 
 [obsidian-gui]
 type = "tar"
