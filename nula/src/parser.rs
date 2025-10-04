@@ -1,5 +1,4 @@
 use crate::ast::AstNode;
-use crate::cli::print_debug;
 use crate::translator::translate_code;
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
@@ -23,25 +22,36 @@ pub fn parse_nula_file(path: &Path) -> Result<AstNode, pest::error::Error<Rule>>
         }
     };
 
-    print_debug(&format!("Parsing code:\n{}", code));
+    println!("DEBUG: Parsing code:\n{}", code);
 
     let pairs = NulaParser::parse(Rule::program, &code)?;
+    println!("DEBUG: Parsed pairs count: {}", pairs.len());
+    for pair in pairs.clone() {
+        println!("DEBUG: Top-level pair rule: {:?}", pair.as_rule());
+        for child in pair.into_inner() {
+            println!("DEBUG: Child rule: {:?}", child.as_rule());
+        }
+    }
     Ok(build_ast(pairs))
 }
 
 fn build_ast(pairs: Pairs<Rule>) -> AstNode {
     let mut nodes = vec![];
     for pair in pairs {
+        println!("DEBUG: Building AST for pair rule: {:?}", pair.as_rule());
         if pair.as_rule() == Rule::COMMENT {
-            continue; // Skip comments in top-level
+            continue;
         }
-        nodes.push(build_node(pair));
+        let node = build_node(pair);
+        println!("DEBUG: Built node: {:?}", node);
+        nodes.push(node);
     }
+    println!("DEBUG: Final program nodes count: {}", nodes.len());
     AstNode::Program(nodes)
 }
 
 fn build_node(pair: Pair<Rule>) -> AstNode {
-    print_debug(&format!("Processing rule: {:?}", pair.as_rule()));
+    println!("DEBUG: Processing rule in build_node: {:?}", pair.as_rule());
     match pair.as_rule() {
         Rule::translation => {
             let mut inner = pair.into_inner();
@@ -74,6 +84,7 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
         Rule::statement => {
             let mut inner = pair.into_inner();
             let stmt = inner.next().unwrap();
+            println!("DEBUG: Statement inner child: {:?}", stmt.as_rule());
             build_node(stmt)
         }
         Rule::variable_decl => {
@@ -192,12 +203,14 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
             }
             AstNode::If(Box::new(cond), body, else_ifs, else_body)
         }
-        Rule::write_stmt => AstNode::Write(Box::new(
-            pair.into_inner()
-            .next()
-            .map(build_expression)
-            .unwrap_or(AstNode::StringLit("".to_string())),
-        )),
+        Rule::write_stmt => {
+            let mut inner = pair.into_inner();
+            println!("DEBUG: Write stmt inner: {:?}", inner.clone().map(|p| p.as_rule()).collect::<Vec<_>>());
+            inner.next(); // Skip "write"
+            let expr_node = inner.next().map(build_expression).unwrap_or(AstNode::StringLit("".to_string()));
+            println!("DEBUG: Write expr: {:?}", expr_node);
+            AstNode::Write(Box::new(expr_node))
+        }
         Rule::add_stmt => {
             let mut inner = pair.into_inner();
             // Skip "add"
@@ -231,14 +244,21 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
             .next()
             .map(|p| Box::new(build_expression(p))),
         ),
-        Rule::expression => build_expression(pair.into_inner().next().unwrap()),
+        Rule::expression => {
+            println!("DEBUG: Building expression from pair: {:?}", pair.as_str());
+            build_expression(pair)
+        }
         Rule::COMMENT => AstNode::Comment(pair.as_str().to_string()),
-        _ => AstNode::Comment(format!("Unknown rule: {:?}", pair.as_rule())),
+        _ => {
+            println!("DEBUG: Unknown rule in build_node: {:?}", pair.as_rule());
+            AstNode::Comment(format!("Unknown rule: {:?}", pair.as_rule()))
+        }
     }
 }
 
-// Funkcje do budowania wyrażeń (bez zmian, ale dla kompletności)
+// Funkcje do budowania wyrażeń
 fn build_expression(pair: Pair<Rule>) -> AstNode {
+    println!("DEBUG: Build expression: {}", pair.as_str());
     let mut inner = pair.into_inner();
     let mut left = build_logic_expr(inner.next().unwrap());
     while let Some(op_pair) = inner.next() {
@@ -306,12 +326,13 @@ fn build_unary_expr(pair: Pair<Rule>) -> AstNode {
 }
 
 fn build_primary(pair: Pair<Rule>) -> AstNode {
+    println!("DEBUG: Build primary: {:?} - {}", pair.as_rule(), pair.as_str());
     match pair.as_rule() {
-        Rule::string => AstNode::StringLit(
-            pair.as_str()
-            .trim_matches(|c| c == '"' || c == '\'')
-            .to_string(),
-        ),
+        Rule::string => {
+            let s = pair.as_str().trim_matches(|c| c == '"' || c == '\'').to_string();
+            println!("DEBUG: Parsed string: {}", s);
+            AstNode::StringLit(s)
+        }
         Rule::number => AstNode::NumberLit(pair.as_str().parse::<f64>().unwrap_or(0.0)),
         Rule::bool => AstNode::BoolLit(pair.as_str() == "true"),
         Rule::ident => AstNode::Ident(pair.as_str().to_string()),
