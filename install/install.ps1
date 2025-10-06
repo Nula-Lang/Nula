@@ -109,12 +109,10 @@ if ($?) {
 }
 
 # Download files with vibrant colors
-Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.4/nula-zig.exe" -Output "$tempDir/nula-zig" -Description "Nula Zig binary"
-Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.4/nula-go.exe" -Output "$tempDir/nula-go" -Description "Nula Go binary"
-Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.4/nula.exe" -Output "$tempDir/nula" -Description "Nula main binary"
+Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.5/nula-zig.exe" -Output "$tempDir/nula-zig" -Description "Nula Zig binary"
+Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.5/nula-go.exe" -Output "$tempDir/nula-go" -Description "Nula Go binary"
+Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.5/nula.exe" -Output "$tempDir/nula" -Description "Nula main binary"
 Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula.png" -Output "$tempDir/nula.png" -Description "Nula icon"
-Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-terminal.sh" -Output "$tempDir/nula-terminal.sh" -Description "Nula terminal script"
-Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula-lang.desktop" -Output "$tempDir/nula-lang.desktop" -Description "Nula desktop file"
 
 # Create Nula directory
 Write-Host "${PINK}┌─[INFO]──${NC} Creating Nula directory..."
