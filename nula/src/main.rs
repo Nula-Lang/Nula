@@ -1,5 +1,4 @@
 use std::env;
-
 mod ast;
 mod cli;
 mod commands;
@@ -18,7 +17,6 @@ fn main() {
         cli::print_help();
         return;
     }
-
     let command = &args[1];
     match command.as_str() {
         "help" | "?" => cli::print_help(),
