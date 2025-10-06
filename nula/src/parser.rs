@@ -1,14 +1,12 @@
 use crate::ast::AstNode;
 use crate::translator::translate_code;
-use pest::iterators::{Pair, Pairs};
+use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
 use std::path::Path;
-
 #[derive(Parser)]
 #[grammar = "nula.pest"]
 pub struct NulaParser;
-
 pub fn parse_nula_file(path: &Path) -> Result<AstNode, pest::error::Error<Rule>> {
     let code = match std::fs::read_to_string(path) {
         Ok(c) => c,
@@ -21,10 +19,8 @@ pub fn parse_nula_file(path: &Path) -> Result<AstNode, pest::error::Error<Rule>>
             ));
         }
     };
-
     println!("DEBUG: Parsing code:\n{}", code);
-
-    let pairs = NulaParser::parse(Rule::program, &code)?;
+    let mut pairs = NulaParser::parse(Rule::program, &code)?;
     println!("DEBUG: Parsed pairs count: {}", pairs.len());
     for pair in pairs.clone() {
         println!("DEBUG: Top-level pair rule: {:?}", pair.as_rule());
@@ -32,32 +28,24 @@ pub fn parse_nula_file(path: &Path) -> Result<AstNode, pest::error::Error<Rule>>
             println!("DEBUG: Child rule: {:?}", child.as_rule());
         }
     }
-    Ok(build_ast(pairs))
+    let program_pair = pairs.next().expect("Expected program pair");
+    Ok(build_node(program_pair))
 }
-
-fn build_ast(pairs: Pairs<Rule>) -> AstNode {
-    let mut nodes = vec![];
-    for pair in pairs {
-        println!("DEBUG: Building AST for pair rule: {:?}", pair.as_rule());
-        if pair.as_rule() == Rule::COMMENT {
-            continue;
-        }
-        let node = build_node(pair);
-        println!("DEBUG: Built node: {:?}", node);
-        nodes.push(node);
-    }
-    println!("DEBUG: Final program nodes count: {}", nodes.len());
-    AstNode::Program(nodes)
-}
-
 fn build_node(pair: Pair<Rule>) -> AstNode {
     println!("DEBUG: Processing rule in build_node: {:?}", pair.as_rule());
     match pair.as_rule() {
+        Rule::program => {
+            let nodes = pair
+            .into_inner()
+            .filter(|p| p.as_rule() != Rule::EOI && p.as_rule() != Rule::COMMENT)
+            .map(build_node)
+            .collect::<Vec<AstNode>>();
+            AstNode::Program(nodes)
+        }
         Rule::translation => {
             let mut inner = pair.into_inner();
-            // Skip "#" and "="
-            inner.next();
-            inner.next();
+            inner.next(); // Skip "#"
+            inner.next(); // Skip "="
             let ident = inner
             .next()
             .map(|p| p.as_str().to_string())
@@ -101,8 +89,7 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
         }
         Rule::assignment => {
             let mut inner = pair.into_inner();
-            // Skip "set"
-            inner.next();
+            inner.next(); // Skip "set"
             let ident = inner
             .next()
             .map(|p| p.as_str().to_string())
@@ -142,7 +129,7 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
             .next()
             .map(build_expression)
             .unwrap_or(AstNode::NumberLit(0.0));
-            let body_pair = inner.next().unwrap(); // Block or do..end
+            let body_pair = inner.next().unwrap();
             let body = body_pair
             .into_inner()
             .map(build_node)
@@ -155,7 +142,7 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
             .next()
             .map(build_expression)
             .unwrap_or(AstNode::BoolLit(false));
-            let body_pair = inner.next().unwrap(); // Block or do..end
+            let body_pair = inner.next().unwrap();
             let body = body_pair
             .into_inner()
             .map(build_node)
@@ -205,16 +192,20 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
         }
         Rule::write_stmt => {
             let mut inner = pair.into_inner();
-            println!("DEBUG: Write stmt inner: {:?}", inner.clone().map(|p| p.as_rule()).collect::<Vec<_>>());
-            inner.next(); // Skip "write"
-            let expr_node = inner.next().map(build_expression).unwrap_or(AstNode::StringLit("".to_string()));
-            println!("DEBUG: Write expr: {:?}", expr_node);
+            println!("DEBUG: Write stmt inner: {:?}", inner.clone().map(|p| p.as_rule()).collect::<Vec<Rule>>());
+            let expr_node = inner
+            .next()
+            .map(|p| {
+                let expr = build_expression(p);
+                println!("DEBUG: Write expr: {:?}", expr);
+                expr
+            })
+            .unwrap_or(AstNode::StringLit("".to_string()));
             AstNode::Write(Box::new(expr_node))
         }
         Rule::add_stmt => {
             let mut inner = pair.into_inner();
-            // Skip "add"
-            inner.next();
+            inner.next(); // Skip "add"
             let left = inner
             .next()
             .map(build_expression)
@@ -227,8 +218,7 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
         }
         Rule::mul_stmt => {
             let mut inner = pair.into_inner();
-            // Skip "mul"
-            inner.next();
+            inner.next(); // Skip "mul"
             let left = inner
             .next()
             .map(build_expression)
@@ -255,8 +245,6 @@ fn build_node(pair: Pair<Rule>) -> AstNode {
         }
     }
 }
-
-// Funkcje do budowania wyrażeń
 fn build_expression(pair: Pair<Rule>) -> AstNode {
     println!("DEBUG: Build expression: {}", pair.as_str());
     let mut inner = pair.into_inner();
@@ -268,7 +256,6 @@ fn build_expression(pair: Pair<Rule>) -> AstNode {
     }
     left
 }
-
 fn build_logic_expr(pair: Pair<Rule>) -> AstNode {
     let mut inner = pair.into_inner();
     let mut left = build_compare_expr(inner.next().unwrap());
@@ -279,7 +266,6 @@ fn build_logic_expr(pair: Pair<Rule>) -> AstNode {
     }
     left
 }
-
 fn build_compare_expr(pair: Pair<Rule>) -> AstNode {
     let mut inner = pair.into_inner();
     let mut left = build_add_expr(inner.next().unwrap());
@@ -290,7 +276,6 @@ fn build_compare_expr(pair: Pair<Rule>) -> AstNode {
     }
     left
 }
-
 fn build_add_expr(pair: Pair<Rule>) -> AstNode {
     let mut inner = pair.into_inner();
     let mut left = build_mul_expr(inner.next().unwrap());
@@ -301,7 +286,6 @@ fn build_add_expr(pair: Pair<Rule>) -> AstNode {
     }
     left
 }
-
 fn build_mul_expr(pair: Pair<Rule>) -> AstNode {
     let mut inner = pair.into_inner();
     let mut left = build_unary_expr(inner.next().unwrap());
@@ -312,7 +296,6 @@ fn build_mul_expr(pair: Pair<Rule>) -> AstNode {
     }
     left
 }
-
 fn build_unary_expr(pair: Pair<Rule>) -> AstNode {
     let mut inner = pair.into_inner();
     let first = inner.next().unwrap();
@@ -324,10 +307,14 @@ fn build_unary_expr(pair: Pair<Rule>) -> AstNode {
         build_primary(first)
     }
 }
-
 fn build_primary(pair: Pair<Rule>) -> AstNode {
     println!("DEBUG: Build primary: {:?} - {}", pair.as_rule(), pair.as_str());
     match pair.as_rule() {
+        Rule::primary => {
+            let inner_pair = pair.into_inner().next().unwrap();
+            println!("DEBUG: Inner primary rule: {:?} - {}", inner_pair.as_rule(), inner_pair.as_str());
+            build_primary(inner_pair)
+        }
         Rule::string => {
             let s = pair.as_str().trim_matches(|c| c == '"' || c == '\'').to_string();
             println!("DEBUG: Parsed string: {}", s);
