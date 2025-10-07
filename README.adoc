@@ -269,7 +269,7 @@ nula run hello.nula
 # = python = {
 def add(a, b):
     return a + b
-print(add(5, 3))
+write(add(5, 3))
 }
 ----
 
