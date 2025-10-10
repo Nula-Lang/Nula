@@ -3,62 +3,54 @@ use crate::cli::print_info;
 pub fn translate_code(lang: &str, code: &str) -> String {
     print_info(&format!("Translating {} code...", lang));
     let lower_lang = lang.to_lowercase();
-    match lower_lang.as_str() {
-        "python" => translate_python(code),
-        "javascript" => translate_javascript(code),
-        "rust" => translate_rust(code),
-        "c" => translate_c(code),
-        "java" => translate_java(code),
-        "go" => translate_go(code),
-        _ => code.to_string(),
+
+    let replacements = match lower_lang.as_str() {
+        "python" => vec![
+            ("print(", "write ("),
+            ("def ", "fn "),
+            (":", " {"),
+            ("\n    ", "\n"),
+            ("self", "_self"),
+            ("class ", "struct "),
+        ],
+        "javascript" => vec![
+            ("console.log(", "write ("),
+            ("function ", "fn "),
+            ("let ", "var "),
+            ("const ", "var "),
+            ("class ", "struct "),
+            ("=>", "=>"),
+        ],
+        "rust" => vec![
+            ("println!(", "write ("),
+            ("let ", "var "),
+            ("mut ", ""),
+            ("&", ""),
+            ("::", "."),
+        ],
+        "c" => vec![
+            ("printf(", "write ("),
+            ("int main(", "fn main("),
+            ("#include ", "import "),
+        ],
+        "java" => vec![
+            ("System.out.println(", "write ("),
+            ("public static void ", "fn "),
+            ("class ", "struct "),
+            ("int ", "var "),
+        ],
+        "go" => vec![
+            ("fmt.Println(", "write ("),
+            ("func ", "fn "),
+            ("package ", "# "),
+        ],
+        _ => return code.to_string(),
+    };
+
+    // Apply all replacements in sequence
+    let mut result = code.to_string();
+    for (from, to) in replacements {
+        result = result.replace(from, to);
     }
-}
-
-fn translate_python(code: &str) -> String {
-    code.replace("print(", "write (")
-    .replace("def ", "fn ")
-    .replace(":", " {")
-    .replace("\n    ", "\n")
-    .replace("self", "_self")
-    .replace("class ", "struct ")
-}
-
-fn translate_javascript(code: &str) -> String {
-    code.replace("console.log(", "write (")
-    .replace("function ", "fn ")
-    .replace("let ", "var ")
-    .replace("const ", "var ")
-    .replace("class ", "struct ")
-    .replace("=>", "=>")
-}
-
-fn translate_rust(code: &str) -> String {
-    code.replace("println!(", "write (")
-    .replace("fn ", "fn ")
-    .replace("let ", "var ")
-    .replace("mut ", "")
-    .replace("struct ", "struct ")
-    .replace("&", "")
-    .replace("::", ".")
-}
-
-fn translate_c(code: &str) -> String {
-    code.replace("printf(", "write (")
-    .replace("int main(", "fn main(")
-    .replace(";", ";")
-    .replace("#include ", "import ")
-}
-
-fn translate_java(code: &str) -> String {
-    code.replace("System.out.println(", "write (")
-    .replace("public static void ", "fn ")
-    .replace("class ", "struct ")
-    .replace("int ", "var ")
-}
-
-fn translate_go(code: &str) -> String {
-    code.replace("fmt.Println(", "write (")
-    .replace("func ", "fn ")
-    .replace("var ", "var ")
-    .replace("package ", "# ")
+    result
 }
