@@ -15,5 +15,5 @@ type = "zip"
 url = ""
 
 []
-type "http"
+type = "http"
 url = ""
