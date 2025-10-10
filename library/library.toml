@@ -9,3 +9,11 @@ url = "https://github.com/Nula-Lang/luma-lib/releases/download/v0.1/luma-lib"
 [obsidian-gui]
 type = "tar"
 url = ""
+
+[]
+type = "zip"
+url = ""
+
+[]
+type "http"
+url = ""
