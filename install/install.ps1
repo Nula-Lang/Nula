@@ -109,9 +109,9 @@ if ($?) {
 }
 
 # Download files with vibrant colors
-Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.5/nula-zig.exe" -Output "$tempDir/nula-zig" -Description "Nula Zig binary"
-Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.5/nula-go.exe" -Output "$tempDir/nula-go" -Description "Nula Go binary"
-Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.5/nula.exe" -Output "$tempDir/nula" -Description "Nula main binary"
+Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.6/nula-zig.exe" -Output "$tempDir/nula-zig" -Description "Nula Zig binary"
+Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.6/nula-go.exe" -Output "$tempDir/nula-go" -Description "Nula Go binary"
+Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/releases/download/v0.6/nula.exe" -Output "$tempDir/nula" -Description "Nula main binary"
 Download-WithSpinner -Url "https://github.com/Nula-Lang/Nula/raw/main/install/desktop/nula.png" -Output "$tempDir/nula.png" -Description "Nula icon"
 
 # Create Nula directory
