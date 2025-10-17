@@ -1,0 +1,17 @@
+{
+  "name": "nula",
+  "version": "1.0.0",
+  "description": "Nula CLI - A future-proof, memory-safe, high-performance programming language",
+  "main": "nula.js",
+  "scripts": {
+    "start": "node nula.js",
+    "install-bin": "cp nula.js ~/.nula/bin/nula"
+  },
+  "bin": {
+    "nula": "./nula.js"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "author": "xAI",
+  "license": "MIT"
+}
