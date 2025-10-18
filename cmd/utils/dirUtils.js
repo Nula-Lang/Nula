@@ -2,11 +2,9 @@ const path = require('path');
 const fs = require('fs');
 const { error } = require('./logger');
 
-module.exports.getNulaDir = function getNulaDir(homeDir) {
-  return path.join(homeDir, '.nula');
-};
+module.exports.getNulaDir = (homeDir) => path.join(homeDir, '.nula');
 
-module.exports.ensureDirs = function ensureDirs(nulaDir) {
+module.exports.ensureDirs = (nulaDir) => {
   const binDir = path.join(nulaDir, 'bin');
   const libDir = path.join(nulaDir, 'lib');
   const logFile = path.join(nulaDir, 'nula.log');
