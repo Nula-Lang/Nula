@@ -12,8 +12,8 @@ module.exports.invokeBinary = function invokeBinary(binaryName, args) {
   const binaryPath = path.join(binDir, binaryName + ext);
   
   if (!fs.existsSync(binaryPath)) {
-    error(`Binary ${binaryName} not found in ${binDir}`);
-    process.exit(1);
+    error(`Binary ${binaryName} not found in ${binDir}. Install or build it.`);
+    throw new Error('Missing binary');
   }
   
   try {
@@ -22,6 +22,6 @@ module.exports.invokeBinary = function invokeBinary(binaryName, args) {
   } catch (err) {
     error(`Error executing ${binaryName}: ${err.message}`);
     log(`Error: ${err.message}`);
-    process.exit(1);
+    throw err;
   }
 };
