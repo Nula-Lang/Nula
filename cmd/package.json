@@ -1,20 +1,20 @@
 {
   "name": "nula",
   "version": "1.0.0",
-  "description": "Nula CLI - A future-proof, memory-safe, high-performance programming language",
-  "main": "/index.js",
+  "description": "Nula CLI",
+  "main": "index.js",
   "scripts": {
-    "start": "node /index.js",
-    "install-bin": "cp /index.js ~/.nula/bin/nula"
+    "start": "node index.js"
   },
   "bin": {
     "nula": "./index.js"
   },
   "dependencies": {
     "commander": "^9.4.1",
-    "chalk": "^4.1.2"
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "figlet": "^1.5.2"
   },
-  "devDependencies": {},
   "author": "VoidArc Studio",
   "license": "BSD 3"
 }
