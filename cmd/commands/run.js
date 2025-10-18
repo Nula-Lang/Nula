@@ -1,11 +1,14 @@
-// src/commands/run.js
 const { invokeBinary } = require('../utils/invoke');
 const { error } = require('../utils/logger');
 
-module.exports = function runCommand(file) {
+module.exports = function runCommand(file, debug) {
   if (!file.endsWith('.nula')) {
-    error('File must be .nula');
-    process.exit(1);
+    error('File must end with .nula');
+    throw new Error('Invalid file');
   }
-  invokeBinary('nula-backend', ['run', file]);
+  const args = ['run', file];
+  if (debug) {
+    args.push('--debug');
+  }
+  invokeBinary('nula-backend', args);
 };
