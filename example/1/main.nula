@@ -1,1 +1,49 @@
+:nula-std: @ Import standard library
+<math> @ Import math module
 
+@ Calculate factorial of a number
+fn factorial(n) {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+@ Main program
+var x = 5
+var fact = factorial(x)
+write "Factorial of " + x + " is " + fact
+
+@ Loop example with array
+var numbers = [1, 2, 3, 4, 5]
+for i in 0..5 {
+    write "Number at index " + i + ": " + numbers[i]
+}
+
+@ Conditional example
+if x > 3 {
+    write x + " is greater than 3"
+} else {
+    write x + " is not greater than 3"
+}
+
+@ Embedded Python for demonstration
+# =python= [
+print("This is embedded Python code!")
+x = 10
+print(f"Python says: {x * 2}")
+]
+
+@ Simple math operations
+var a = 10
+var b = 3
+write "Sum: " + (a + b)
+write "Power: " + (a ^ b)
+
+! Multi-line comment
+This program showcases Nula's syntax with:
+- Function definitions
+- Loops and conditionals
+- Arrays and indexing
+- Embedded code
+!
