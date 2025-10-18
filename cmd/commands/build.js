@@ -1,16 +1,19 @@
-// src/commands/build.js
 const { invokeBinary } = require('../utils/invoke');
 const { error } = require('../utils/logger');
 
-module.exports = function buildCommand(platform, file) {
+module.exports = function buildCommand(platform, file, optimize) {
   const validPlatforms = ['linux', 'windows', 'macos'];
   if (!validPlatforms.includes(platform)) {
-    error('Invalid platform. Supported: ' + validPlatforms.join(', '));
-    process.exit(1);
+    error(`Invalid platform. Supported: ${validPlatforms.join(', ')}`);
+    throw new Error('Invalid platform');
   }
   if (!file.endsWith('.nula')) {
-    error('File must be .nula');
-    process.exit(1);
+    error('File must end with .nula');
+    throw new Error('Invalid file');
   }
-  invokeBinary('nula-compiler', ['--platform', platform, file]);
+  const args = ['--platform', platform, file];
+  if (optimize) {
+    args.push('--optimize');
+  }
+  invokeBinary('nula-compiler', args);
 };
